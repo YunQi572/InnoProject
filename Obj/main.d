@@ -33,3 +33,4 @@
 .\obj\main.o: .\APP\lsens\lsens.h
 .\obj\main.o: User\../APP/tftlcd/tftlcd.h
 .\obj\main.o: User\../APP/dht11/dht11.h
+.\obj\main.o: User\../APP/rtc/rtc.h
