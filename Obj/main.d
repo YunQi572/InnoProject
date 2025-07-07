@@ -34,3 +34,11 @@
 .\obj\main.o: .\Public\usart.h
 .\obj\main.o: D:\keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 .\obj\main.o: .\APP\lsens\lsens.h
+.\obj\main.o: User\../APP/tftlcd/tftlcd.h
+.\obj\main.o: User\../APP/rtc/rtc.h
+.\obj\main.o: User\../APP/dht11/dht11.h
+.\obj\main.o: User\../APP/beep/beep.h
+.\obj\main.o: User\../APP/ws2812/ws2812.h
+.\obj\main.o: User\../APP/key/key.h
+.\obj\main.o: User\../APP/hwjs/hwjs.h
+.\obj\main.o: User\../APP/pwm/pwm.h
