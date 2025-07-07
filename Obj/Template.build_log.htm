@@ -5,10 +5,10 @@
 <h2>Tool Versions:</h2>
 IDE-Version: μVision V5.14.0.0
 Copyright (C) 2015 ARM Ltd and ARM Germany GmbH. All rights reserved.
-License Information: Xie Dige, Whu, LIC=----
+License Information: Xie Dige, Whu, LIC=76F5U-SW1R7-LQB0Q-NYPMF-JFC85-NVITW
  
 Tool Versions:
-Toolchain:       MDK-Lite  Version: 5.14.0.0
+Toolchain:       MDK-ARM Standard  Version: 5.14.0.0
 Toolchain Path:  D:\keil_v5\ARM\ARMCC\Bin
 C Compiler:      Armcc.exe V5.05 update 1 (build 106)
 Assembler:       Armasm.exe V5.05 update 1 (build 106)
@@ -21,8 +21,8 @@ Target DLL:      CMSIS_AGDI.dll V1.21.0.0
 Dialog DLL:      TCM.DLL V1.14.4.0
  
 <h2>Project:</h2>
-D:\Desktop_Files\InnoProject\Final_Project\22-光敏传感器实验\Template.uvprojx
-Project File Date:  11/23/2019
+D:\Desktop_Files\InnoProject\Final_Project\Final\Template.uvprojx
+Project File Date:  07/07/2025
 
 <h2>Output:</h2>
 Rebuild target 'Target 1'
@@ -44,19 +44,48 @@ compiling system_stm32f10x.c...
 compiling core_cm3.c...
 compiling led.c...
 compiling lsens.c...
+compiling tftlcd.c...
+APP\tftlcd\tftlcd.c(1116): warning:  #177-D: variable "g" was declared but never referenced
+        u16 r=0,g=0,b=0;
+APP\tftlcd\tftlcd.c(1116): warning:  #177-D: variable "b" was declared but never referenced
+        u16 r=0,g=0,b=0;
+APP\tftlcd\tftlcd.c(1117): warning:  #177-D: variable "r1" was declared but never referenced
+        u16 r1,r2,r3;
+APP\tftlcd\tftlcd.c(1117): warning:  #177-D: variable "r2" was declared but never referenced
+        u16 r1,r2,r3;
+APP\tftlcd\tftlcd.c(1117): warning:  #177-D: variable "r3" was declared but never referenced
+        u16 r1,r2,r3;
+APP\tftlcd\tftlcd.c(1118): warning:  #177-D: variable "value" was declared but never referenced
+        u32 value;
+APP\tftlcd\tftlcd.c(4238): warning:  #550-D: variable "num" was set but never used
+        long tmp=0,num=0;
+APP\tftlcd\tftlcd.c: 7 warnings, 0 errors
+compiling oled.c...
+compiling beep.c...
+compiling dht11.c...
+compiling hwjs.c...
+compiling key.c...
+compiling pwm.c...
+compiling rtc.c...
+compiling ws2812.c...
 compiling system.c...
 compiling SysTick.c...
 compiling usart.c...
 linking...
-Program Size: Code=3544 RO-data=336 RW-data=32 ZI-data=1224  
-FromELF: creating hex file...
-".\Obj\Template.axf" - 0 Error(s), 0 Warning(s).
+.\Obj\Template.axf: Error: L6200E: Symbol ascii_1206 multiply defined (by oled.o and tftlcd.o).
+.\Obj\Template.axf: Error: L6200E: Symbol ascii_1608 multiply defined (by oled.o and tftlcd.o).
+.\Obj\Template.axf: Error: L6200E: Symbol ascii_2412 multiply defined (by oled.o and tftlcd.o).
+Not enough information to list image symbols.
+Not enough information to list the image map.
+Finished: 2 information, 0 warning and 3 error messages.
+".\Obj\Template.axf" - 3 Error(s), 7 Warning(s).
 
 <h2>Collection of Component include folders:</h2>
-  D:\Desktop_Files\InnoProject\Final_Project\22-光敏传感器实验\RTE
+  D:\Desktop_Files\InnoProject\Final_Project\Final\RTE
   D:\keil_v5\pack\Keil\STM32F1xx_DFP\2.2.0
 
 <h2>Collection of Component Files used:</h2>
+Target not created.
 </pre>
 </body>
 </html>
