@@ -42,3 +42,4 @@
 .\obj\main.o: .\APP\usart3\usart3.h
 .\obj\main.o: D:\app\SummerLearning\Keil5\ARM\ARMCC\Bin\..\include\string.h
 .\obj\main.o: .\APP\led\led.h
+.\obj\main.o: D:\app\SummerLearning\Keil5\ARM\ARMCC\Bin\..\include\stdlib.h

@@ -11,6 +11,7 @@
 #include "usart3.h"
 #include "string.h"
 #include "led.h"
+#include "stdlib.h"
 
 // 声明外部函数
 extern void USART3_Init(u32 bound);
@@ -24,10 +25,100 @@ extern u16 beep_period;
 // 当前功能模式: 0=传感器模式, 1=蓝牙模式
 u8 current_mode = 0;
 
+// 蓝牙初始化状态: 0=未初始化, 1=已初始化成功, 2=初始化失败, 3=初始化被中断
+u8 bt_initialized = 0;
+
 // 蓝牙相关变量
 u8 sendmask = 0;
 u8 sendcnt = 0;
 u8 sendbuf[20];
+
+// 蜂鸣器延时控制变量
+u16 beep_delay = 0;		  // 延时计数器，单位：100ms
+u8 beep_timer_active = 0; // 0: 未激活, 1: 已激活
+
+// 初始化蓝牙模块，可被KEY2中断
+// 返回值: 0=成功, 1=失败, 2=被中断
+u8 Initialize_Bluetooth(void)
+{
+	// 声明变量（必须在函数开头）
+	u8 retry;
+	u8 key_val;
+
+	// 如果已经初始化过且成功，直接返回
+	if (bt_initialized == 1)
+		return 0;
+
+	LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"Initializing HC05...");
+	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"KEY2:Cancel & Return");
+
+	// 等待蓝牙模块上电稳定
+	delay_ms(500);
+
+	// 初始化串口3
+	USART3_Init(9600);
+
+	// 尝试初始化HC05
+	retry = 3; // 最多尝试3次
+	while (retry--)
+	{
+		// 每次尝试前检查KEY2是否按下
+		key_val = KEY_Scan(0);
+		if (key_val == KEY2_PRESS)
+		{
+			LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"Init Canceled!     ");
+			printf("HC05 Init canceled by user\r\n");
+			bt_initialized = 3; // 标记为被中断
+			delay_ms(500);
+			return 2; // 返回被中断状态
+		}
+
+		if (HC05_Init() == 0)
+		{
+			LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"HC05 Init OK!      ");
+			printf("HC05 OK!\r\n");
+			bt_initialized = 1;
+			delay_ms(500);
+			return 0;
+		}
+
+		printf("HC05 Init failed, retrying...\r\n");
+		LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"HC05 Error!      ");
+		delay_ms(300);
+
+		// 再次检查KEY2是否按下
+		key_val = KEY_Scan(0);
+		if (key_val == KEY2_PRESS)
+		{
+			LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"Init Canceled!     ");
+			printf("HC05 Init canceled by user\r\n");
+			bt_initialized = 3; // 标记为被中断
+			delay_ms(500);
+			return 2; // 返回被中断状态
+		}
+
+		LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"Retrying...      ");
+		delay_ms(300);
+
+		// 再次检查KEY2是否按下
+		key_val = KEY_Scan(0);
+		if (key_val == KEY2_PRESS)
+		{
+			LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"Init Canceled!     ");
+			printf("HC05 Init canceled by user\r\n");
+			bt_initialized = 3; // 标记为被中断
+			delay_ms(500);
+			return 2; // 返回被中断状态
+		}
+	}
+
+	// 初始化失败
+	printf("HC05 Error!\r\n");
+	LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"HC05 Init Failed! ");
+	bt_initialized = 2;
+	delay_ms(1000);
+	return 1;
+}
 
 // 显示HC05模块的主从状态
 void HC05_Role_Show(void)
@@ -103,9 +194,21 @@ void Show_Sensor_Info(u8 temp, u8 humi, u8 lsens_value)
 	sprintf(buf, "Volume: %d%%", beep_duty * 100 / beep_period);
 	LCD_ShowString(10, 200, 220, 16, 16, (u8 *)buf);
 
+	// 如果蜂鸣器定时器已激活，显示倒计时
+	if (beep_timer_active)
+	{
+		LCD_Fill(10, 260, 220, 276, WHITE);
+		sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+	}
+	else
+	{
+		LCD_Fill(10, 260, 220, 276, WHITE);
+	}
+
 	// 显示当前模式
 	LCD_Fill(10, 230, 220, 246, WHITE);
-	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to switch mode");
+	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
 }
 
 // 显示蓝牙界面
@@ -120,11 +223,77 @@ void Show_BT_Info(void)
 	LCD_ShowString(10, 110, 200, 16, 16, (u8 *)"HC05 Standby!");
 	LCD_ShowString(10, 160, 200, 16, 16, (u8 *)"Send:");
 	LCD_ShowString(10, 180, 200, 16, 16, (u8 *)"Receive:");
-	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to switch mode");
+	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to Sensor mode");
+
+	// 如果蜂鸣器定时器已激活，显示倒计时
+	if (beep_timer_active)
+	{
+		char buf[32];
+		sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+	}
 
 	FRONT_COLOR = BLUE;
 	HC05_Role_Show();
 	HC05_Sta_Show();
+}
+
+// 处理接收到的蓝牙命令
+void Process_BT_Command(u8 *buf, u16 len)
+{
+	// 控制LED2
+	if (strcmp((const char *)buf, "+LED2 ON\r\n") == 0)
+	{
+		LED2 = 0; // 打开LED2
+	}
+	else if (strcmp((const char *)buf, "+LED2 OFF\r\n") == 0)
+	{
+		LED2 = 1; // 关闭LED2
+	}
+
+	// 直接控制蜂鸣器
+	else if (strcmp((const char *)buf, "+BEEP ON\r\n") == 0)
+	{
+		BEEP_On();
+	}
+	else if (strcmp((const char *)buf, "+BEEP OFF\r\n") == 0)
+	{
+		BEEP_Off();
+	}
+
+	// 延时控制蜂鸣器
+	else if (strncmp((const char *)buf, "+BEEP ", 6) == 0)
+	{
+		// 解析延时时间（秒）
+		u8 seconds = atoi((const char *)&buf[6]);
+		if (seconds > 0)
+		{
+			// 设置延时
+			beep_delay = seconds * 10; // 转换为100ms单位
+			beep_timer_active = 1;	   // 激活定时器
+
+			// 反馈信息
+			if (bt_initialized == 1)
+			{
+				u3_printf("Will turn on BEEP in %d seconds\r\n", seconds);
+			}
+			printf("Will turn on BEEP in %d seconds\r\n", seconds);
+
+			// 更新显示
+			if (current_mode == 0)
+			{
+				char buf[32];
+				LCD_Fill(10, 260, 220, 276, WHITE);
+				sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+				LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+			}
+			else
+			{
+				// 在蓝牙模式下，刷新整个界面来显示倒计时
+				Show_BT_Info();
+			}
+		}
+	}
 }
 
 int main()
@@ -134,6 +303,7 @@ int main()
 	u8 key_val = 0;
 	u8 t = 0;
 	u8 reclen = 0;
+	u8 bt_init_result = 0;
 
 	// 系统初始化
 	SysTick_Init(72);
@@ -141,7 +311,6 @@ int main()
 
 	// 外设初始化
 	USART1_Init(115200);
-	USART3_Init(9600);
 	TFTLCD_Init();
 	LCD_Clear(WHITE);
 	FRONT_COLOR = BLACK;
@@ -161,18 +330,6 @@ int main()
 	LCD_ShowString(60, 60, 200, 24, 24, (u8 *)"Starting...");
 	delay_ms(1000); // 延长显示时间，确保用户能看到
 
-	// 初始化HC05模块
-	delay_ms(1000); // 等待蓝牙模块上电稳定
-	while (HC05_Init())
-	{
-		printf("HC05 Error!\r\n");
-		LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"HC05 Error!    ");
-		delay_ms(500);
-		LCD_ShowString(10, 100, 200, 16, 16, (u8 *)"Please Check!!!");
-		delay_ms(100);
-	}
-	printf("HC05 OK!\r\n");
-
 	// 清屏并显示初始界面（传感器模式）
 	LCD_Clear(WHITE);
 
@@ -185,23 +342,86 @@ int main()
 
 	while (1)
 	{
+		// 处理蜂鸣器定时器
+		if (beep_timer_active)
+		{
+			if (beep_delay > 0)
+			{
+				beep_delay--;
+				if (beep_delay == 0)
+				{
+					BEEP_On(); // 延时结束，打开蜂鸣器
+					beep_timer_active = 0;
+
+					// 更新显示
+					if (current_mode == 0)
+					{
+						Show_Sensor_Info(temp, humi, lsens_value);
+					}
+					else
+					{
+						char buf[32];
+						LCD_Fill(10, 260, 220, 276, WHITE);
+						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP is now ON!");
+					}
+
+					// 反馈信息
+					if (bt_initialized == 1)
+					{
+						u3_printf("BEEP is now ON!\r\n");
+					}
+					printf("BEEP is now ON!\r\n");
+				}
+				else if (beep_delay % 10 == 0 && (current_mode == 0 || current_mode == 1))
+				{
+					// 每秒更新一次显示
+					char buf[32];
+					LCD_Fill(10, 260, 220, 276, WHITE);
+					sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+					LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+				}
+			}
+		}
+
 		// 扫描按键
 		key_val = KEY_Scan(0);
 
-		// 模式切换（KEY2长按）
+		// 模式切换（KEY2按键）
 		if (key_val == KEY2_PRESS)
 		{
-			current_mode = !current_mode; // 切换模式
 			if (current_mode == 0)
 			{
-				// 切换到传感器模式
-				LCD_Clear(WHITE);
-				Show_Sensor_Info(temp, humi, lsens_value);
+				// 正在从传感器模式切换到蓝牙模式
+
+				// 尝试初始化蓝牙模块(如果还没初始化)
+				bt_init_result = Initialize_Bluetooth();
+
+				if (bt_init_result == 0)
+				{
+					// 初始化成功，切换到蓝牙模式
+					current_mode = 1;
+					Show_BT_Info();
+				}
+				else if (bt_init_result == 2)
+				{
+					// 初始化被用户中断，保持在传感器模式
+					LCD_Clear(WHITE);
+					Show_Sensor_Info(temp, humi, lsens_value);
+				}
+				else
+				{
+					// 初始化失败，保持在传感器模式
+					LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"BT Init Failed!         ");
+					delay_ms(1000);
+					LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to try again");
+				}
 			}
 			else
 			{
-				// 切换到蓝牙模式
-				Show_BT_Info();
+				// 从蓝牙模式切换到传感器模式
+				current_mode = 0;
+				LCD_Clear(WHITE);
+				Show_Sensor_Info(temp, humi, lsens_value);
 			}
 		}
 
@@ -287,26 +507,17 @@ int main()
 				USART3_RX_BUF[reclen] = '\0';		// 加入结束符
 				printf("reclen=%d\r\n", reclen);
 				printf("USART3_RX_BUF=%s\r\n", USART3_RX_BUF);
-				if (reclen == 10 || reclen == 11)
-				{ // 控制D2检测
-					if (strcmp((const char *)USART3_RX_BUF, "+LED2 ON\r\n") == 0)
-						LED2 = 0; // 打开LED2
-					if (strcmp((const char *)USART3_RX_BUF, "+LED2 OFF\r\n") == 0)
-						LED2 = 1; // 关闭LED2
 
-					// 扩展: 通过蓝牙控制蜂鸣器
-					if (strcmp((const char *)USART3_RX_BUF, "+BEEP ON\r\n") == 0)
-						BEEP_On();
-					if (strcmp((const char *)USART3_RX_BUF, "+BEEP OFF\r\n") == 0)
-						BEEP_Off();
-				}
+				// 处理接收到的命令
+				Process_BT_Command(USART3_RX_BUF, reclen);
+
 				LCD_ShowString(10, 200, 209, 119, 16, USART3_RX_BUF); // 显示接收到的数据
 				USART3_RX_STA = 0;
 			}
 		}
 
-		// 延时50ms后再次读取
-		delay_ms(50);
+		// 延时100ms后再次读取
+		delay_ms(100);
 		t++;
 	}
 }
