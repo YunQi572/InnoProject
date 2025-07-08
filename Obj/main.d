@@ -37,6 +37,8 @@
 .\obj\main.o: User\../APP/key/key.h
 .\obj\main.o: User\../APP/beep/beep.h
 .\obj\main.o: User\../APP/hc05/hc05.h
+.\obj\main.o: User\../APP/hwjs/hwjs.h
+.\obj\main.o: User\../APP/pwm/pwm.h
 .\obj\main.o: .\Public\usart.h
 .\obj\main.o: D:\app\SummerLearning\Keil5\ARM\ARMCC\Bin\..\include\stdio.h
 .\obj\main.o: .\APP\usart3\usart3.h

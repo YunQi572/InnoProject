@@ -7,6 +7,8 @@
 #include "../APP/key/key.h"
 #include "../APP/beep/beep.h"
 #include "../APP/hc05/hc05.h"
+#include "../APP/hwjs/hwjs.h"
+#include "../APP/pwm/pwm.h"
 #include "usart.h"
 #include "usart3.h"
 #include "string.h"
@@ -22,6 +24,17 @@ extern u8 beep_status;
 extern u16 beep_duty;
 extern u16 beep_period;
 
+// 红外遥控按键编码
+#define IR_KEY1 0x00FF30CF // 按键1的编码（根据实际遥控器可能需要修改）
+#define IR_KEY2 0x00FF18E7 // 按键2的编码（根据实际遥控器可能需要修改）
+#define IR_KEY3 0x00FF7A85 // 按键3的编码
+#define IR_KEY4 0x00FF10EF // 按键4的编码
+#define IR_KEY5 0x00FF38C7 // 按键5的编码
+#define IR_KEY6 0x00FF5AA5 // 按键6的编码
+#define IR_KEY7 0x00FF42BD // 按键7的编码 - 增大电机功率
+#define IR_KEY8 0x00FF4AB5 // 按键8的编码 - 减小电机功率
+#define IR_KEY9 0x00FF52AD // 按键9的编码
+
 // 当前功能模式: 0=传感器模式, 1=蓝牙模式
 u8 current_mode = 0;
 
@@ -36,6 +49,14 @@ u8 sendbuf[20];
 // 蜂鸣器延时控制变量
 u16 beep_delay = 0;		  // 延时计数器，单位：100ms
 u8 beep_timer_active = 0; // 0: 未激活, 1: 已激活
+
+// BEEP设置模式
+u8 beep_setting_mode = 0;	  // 0: 非设置模式, 1: 设置模式
+u16 beep_setting_seconds = 0; // 设置的延时秒数
+
+// 直流电机控制变量
+u16 motor_power = 0;	   // 当前电机功率值(0-500)
+u16 motor_power_max = 499; // 最大电机功率值
 
 // 初始化蓝牙模块，可被KEY2中断
 // 返回值: 0=成功, 1=失败, 2=被中断
@@ -194,26 +215,48 @@ void Show_Sensor_Info(u8 temp, u8 humi, u8 lsens_value)
 	sprintf(buf, "Volume: %d%%", beep_duty * 100 / beep_period);
 	LCD_ShowString(10, 200, 220, 16, 16, (u8 *)buf);
 
-	// 如果蜂鸣器定时器已激活，显示倒计时
-	if (beep_timer_active)
+	// 显示当前模式
+	LCD_Fill(10, 230, 220, 246, WHITE);
+	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
+
+	// 显示BEEP状态或倒计时
+	LCD_Fill(10, 260, 220, 276, WHITE);
+	if (beep_setting_mode)
 	{
-		LCD_Fill(10, 260, 220, 276, WHITE);
-		sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP: SETTING");
+
+		// 显示当前设置的延时时间
+		LCD_Fill(10, 290, 220, 306, WHITE);
+		sprintf(buf, "Delay: %d seconds", beep_setting_seconds);
+		LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
+	}
+	else if (beep_timer_active)
+	{
+		sprintf(buf, "BEEP: COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
 		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
 	}
 	else
 	{
-		LCD_Fill(10, 260, 220, 276, WHITE);
+		sprintf(buf, "BEEP: %s", beep_status ? "ON" : "OFF");
+		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
 	}
 
-	// 显示当前模式
-	LCD_Fill(10, 230, 220, 246, WHITE);
-	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
+	// 显示LED2状态
+	LCD_Fill(10, 320, 220, 336, WHITE);
+	sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
+	LCD_ShowString(10, 320, 220, 16, 16, (u8 *)buf);
+
+	// 显示电机功率
+	LCD_Fill(10, 350, 220, 366, WHITE);
+	sprintf(buf, "Motor Power: %d", motor_power);
+	LCD_ShowString(10, 350, 220, 16, 16, (u8 *)buf);
 }
 
 // 显示蓝牙界面
 void Show_BT_Info(void)
 {
+	char buf[32]; // 将变量声明移到函数开头
+
 	LCD_Clear(WHITE);
 	FRONT_COLOR = RED;
 	LCD_ShowString(10, 10, 240, 16, 16, (u8 *)"PRECHIN");
@@ -228,10 +271,14 @@ void Show_BT_Info(void)
 	// 如果蜂鸣器定时器已激活，显示倒计时
 	if (beep_timer_active)
 	{
-		char buf[32];
 		sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
 		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
 	}
+
+	// 显示LED2状态
+	LCD_Fill(10, 290, 220, 306, WHITE);
+	sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
+	LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
 
 	FRONT_COLOR = BLUE;
 	HC05_Role_Show();
@@ -296,6 +343,156 @@ void Process_BT_Command(u8 *buf, u16 len)
 	}
 }
 
+// 处理红外遥控器输入
+void Process_IR_Command(void)
+{
+	char buf[32]; // 将变量声明移到函数开头
+
+	if (hw_jsbz)
+	{										   // 有红外数据接收到
+		printf("IR Code: 0x%08X\r\n", hw_jsm); // 打印接收到的红外代码
+
+		// 根据红外代码控制LED2
+		if (hw_jsm == IR_KEY1)
+		{			  // 按键1
+			LED2 = 0; // 开LED2
+			printf("IR Key 1: LED2 ON\r\n");
+
+			// 更新显示
+			if (current_mode == 0)
+			{
+				LCD_Fill(10, 320, 220, 336, WHITE);
+				sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
+				LCD_ShowString(10, 320, 220, 16, 16, (u8 *)buf);
+			}
+			else
+			{
+				LCD_Fill(10, 320, 220, 336, WHITE);
+				sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
+				LCD_ShowString(10, 320, 220, 16, 16, (u8 *)buf);
+			}
+		}
+		else if (hw_jsm == IR_KEY2)
+		{			  // 按键2
+			LED2 = 1; // 关LED2
+			printf("IR Key 2: LED2 OFF\r\n");
+
+			// 更新显示
+			if (current_mode == 0)
+			{
+				LCD_Fill(10, 320, 220, 336, WHITE);
+				sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
+				LCD_ShowString(10, 320, 220, 16, 16, (u8 *)buf);
+			}
+			else
+			{
+				LCD_Fill(10, 320, 220, 336, WHITE);
+				sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
+				LCD_ShowString(10, 320, 220, 16, 16, (u8 *)buf);
+			}
+		}
+		else if (hw_jsm == IR_KEY3)
+		{ // 按键3 - 进入BEEP设置模式
+			beep_setting_mode = 1;
+			printf("IR Key 3: BEEP SETTING MODE\r\n");
+
+			// 更新显示
+			LCD_Fill(10, 260, 220, 276, WHITE);
+			LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP: SETTING");
+
+			// 显示当前设置的延时时间
+			LCD_Fill(10, 290, 220, 306, WHITE);
+			sprintf(buf, "Delay: %d seconds", beep_setting_seconds);
+			LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
+		}
+		else if (hw_jsm == IR_KEY4)
+		{ // 按键4 - 增加延时时间
+			if (beep_setting_mode)
+			{
+				beep_setting_seconds++;
+				printf("IR Key 4: Increase delay to %d seconds\r\n", beep_setting_seconds);
+
+				// 更新显示
+				LCD_Fill(10, 290, 220, 306, WHITE);
+				sprintf(buf, "Delay: %d seconds", beep_setting_seconds);
+				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
+			}
+		}
+		else if (hw_jsm == IR_KEY5)
+		{ // 按键5 - 减少延时时间
+			if (beep_setting_mode && beep_setting_seconds > 0)
+			{
+				beep_setting_seconds--;
+				printf("IR Key 5: Decrease delay to %d seconds\r\n", beep_setting_seconds);
+
+				// 更新显示
+				LCD_Fill(10, 290, 220, 306, WHITE);
+				sprintf(buf, "Delay: %d seconds", beep_setting_seconds);
+				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
+			}
+		}
+		else if (hw_jsm == IR_KEY6)
+		{ // 按键6 - 开始倒计时
+			if (beep_setting_mode && beep_setting_seconds > 0)
+			{
+				beep_setting_mode = 0;					// 退出设置模式
+				beep_delay = beep_setting_seconds * 10; // 转换为100ms单位
+				beep_timer_active = 1;					// 激活定时器
+
+				printf("IR Key 6: Start countdown %d seconds\r\n", beep_setting_seconds);
+
+				// 更新显示
+				LCD_Fill(10, 260, 220, 276, WHITE);
+				sprintf(buf, "BEEP: COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
+				LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+
+				// 清除设置时间显示
+				LCD_Fill(10, 290, 220, 306, WHITE);
+			}
+		}
+		else if (hw_jsm == IR_KEY7)
+		{ // 按键7 - 增大电机功率
+			if (motor_power < motor_power_max)
+			{
+				motor_power += 50;
+				if (motor_power > motor_power_max)
+					motor_power = motor_power_max;
+
+				// 设置电机功率 - 由于TIM_OCPolarity_Low设置，需要反转PWM逻辑
+				// 功率越大，比较值应该越小
+				TIM_SetCompare2(TIM3, motor_power_max - motor_power);
+				printf("IR Key 7: Increase motor power to %d\r\n", motor_power);
+
+				// 更新显示
+				LCD_Fill(10, 350, 220, 366, WHITE);
+				sprintf(buf, "Motor Power: %d", motor_power);
+				LCD_ShowString(10, 350, 220, 16, 16, (u8 *)buf);
+			}
+		}
+		else if (hw_jsm == IR_KEY8)
+		{ // 按键8 - 减小电机功率
+			if (motor_power > 0)
+			{
+				motor_power -= 50;
+				if (motor_power < 0)
+					motor_power = 0;
+
+				// 设置电机功率 - 由于TIM_OCPolarity_Low设置，需要反转PWM逻辑
+				// 功率越小，比较值应该越大
+				TIM_SetCompare2(TIM3, motor_power_max - motor_power);
+				printf("IR Key 8: Decrease motor power to %d\r\n", motor_power);
+
+				// 更新显示
+				LCD_Fill(10, 350, 220, 366, WHITE);
+				sprintf(buf, "Motor Power: %d", motor_power);
+				LCD_ShowString(10, 350, 220, 16, 16, (u8 *)buf);
+			}
+		}
+
+		hw_jsbz = 0; // 处理完成，清除标志
+	}
+}
+
 int main()
 {
 	u8 temp = 0, humi = 0;
@@ -304,6 +501,7 @@ int main()
 	u8 t = 0;
 	u8 reclen = 0;
 	u8 bt_init_result = 0;
+	char buf[32]; // 显示缓冲区
 
 	// 系统初始化
 	SysTick_Init(72);
@@ -325,6 +523,13 @@ int main()
 	KEY_Init();
 	LED_Init();
 	BEEP_Init();
+
+	// 电机PWM初始化 - 使用原始示例中的方法
+	TIM3_CH2_PWM_Init(motor_power_max, 72 - 1);			  // 频率约2KHz
+	TIM_SetCompare2(TIM3, motor_power_max - motor_power); // 初始功率为0，反转PWM逻辑
+
+	// 红外接收初始化
+	Hwjs_Init();
 
 	// 显示启动信息
 	LCD_ShowString(60, 60, 200, 24, 24, (u8 *)"Starting...");
@@ -356,13 +561,17 @@ int main()
 					// 更新显示
 					if (current_mode == 0)
 					{
+						// 更新BEEP状态显示
+						LCD_Fill(10, 260, 220, 276, WHITE);
+						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP: ON");
+
 						Show_Sensor_Info(temp, humi, lsens_value);
 					}
 					else
 					{
 						char buf[32];
 						LCD_Fill(10, 260, 220, 276, WHITE);
-						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP is now ON!");
+						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP: ON");
 					}
 
 					// 反馈信息
@@ -372,16 +581,19 @@ int main()
 					}
 					printf("BEEP is now ON!\r\n");
 				}
-				else if (beep_delay % 10 == 0 && (current_mode == 0 || current_mode == 1))
-				{
-					// 每秒更新一次显示
+				else if (beep_delay % 10 == 0)
+				{ // 每秒更新一次显示
+					// 更新倒计时显示
 					char buf[32];
 					LCD_Fill(10, 260, 220, 276, WHITE);
-					sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+					sprintf(buf, "BEEP: COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
 					LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
 				}
 			}
 		}
+
+		// 处理红外遥控器输入
+		Process_IR_Command();
 
 		// 扫描按键
 		key_val = KEY_Scan(0);

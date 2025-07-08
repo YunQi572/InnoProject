@@ -3,7 +3,7 @@
 
 #include "system.h"
 
-void TIM3_CH2_PWM_Init(u16 per,u16 psc);
+void TIM3_CH2_PWM_Init(u16 per, u16 psc);
 void Motor_PWM_Init(u16 per, u16 psc);
 void Motor_On(void);
 void Motor_Off(void);
