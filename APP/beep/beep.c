@@ -1,25 +1,130 @@
 #include "beep.h"
+#include "SysTick.h"
 
+// PWM parameters for volume control
+u16 beep_period = 100;
+u16 beep_duty = 50; // Default volume (0-100)
+u8 beep_status = 0; // 0: off, 1: on
 
 /*******************************************************************************
-* 函 数 名         : BEEP_Init
-* 函数功能		   : 蜂鸣器初始化
-* 输    入         : 无
-* 输    出         : 无
-*******************************************************************************/
-void BEEP_Init(void)	  //端口初始化
+ *            : BEEP_Init
+ * 		   : 始
+ *              :
+ *              :
+ *******************************************************************************/
+void BEEP_Init(void) // 丝诔始
 {
-	GPIO_InitTypeDef GPIO_InitStructure;	//声明一个结构体变量，用来初始化GPIO
+	GPIO_InitTypeDef GPIO_InitStructure; // 一峁故糋PIO
+	TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure;
+	TIM_OCInitTypeDef TIM_OCInitStructure;
 
-	RCC_APB2PeriphClockCmd(BEEP_PORT_RCC,ENABLE);   /* 开启GPIO时钟 */
+	RCC_APB2PeriphClockCmd(BEEP_PORT_RCC, ENABLE); /* GPIO时 */
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
 
-	/*  配置GPIO的模式和IO口 */
-	GPIO_InitStructure.GPIO_Pin=BEEP_PIN;		//选择你要设置的IO口
-	GPIO_InitStructure.GPIO_Mode=GPIO_Mode_Out_PP;		  //设置推挽输出模式
-	GPIO_InitStructure.GPIO_Speed=GPIO_Speed_50MHz;	  //设置传输速率
-	GPIO_Init(BEEP_PORT,&GPIO_InitStructure); 	 /* 初始化GPIO */
-	
-	GPIO_ResetBits(BEEP_PORT,BEEP_PIN);
+	/*  GPIO模式IO */
+	GPIO_InitStructure.GPIO_Pin = BEEP_PIN;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(BEEP_PORT, &GPIO_InitStructure);
+
+	// Configure Timer for PWM
+	TIM_TimeBaseInitStructure.TIM_Period = beep_period - 1;
+	TIM_TimeBaseInitStructure.TIM_Prescaler = 72 - 1; // 72MHz / 72 = 1MHz
+	TIM_TimeBaseInitStructure.TIM_ClockDivision = 0;
+	TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_TimeBaseInit(TIM4, &TIM_TimeBaseInitStructure);
+
+	// Configure PWM channel - PB8 is TIM4_CH3
+	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+	TIM_OCInitStructure.TIM_Pulse = 0; // Initially off
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+	TIM_OC3Init(TIM4, &TIM_OCInitStructure);
+	TIM_OC3PreloadConfig(TIM4, TIM_OCPreload_Enable);
+
+	TIM_ARRPreloadConfig(TIM4, ENABLE);
+	TIM_Cmd(TIM4, ENABLE);
+
+	beep_status = 0; // Beeper off by default
 }
 
+/*******************************************************************************
+ *            : BEEP_On
+ * 		   :
+ *              :
+ *              :
+ *******************************************************************************/
+void BEEP_On(void)
+{
+	if (beep_status == 0)
+	{
+		TIM_SetCompare3(TIM4, beep_duty);
+		beep_status = 1;
+	}
+}
 
+/*******************************************************************************
+ *            : BEEP_Off
+ * 		   :乇
+ *              :
+ *              :
+ *******************************************************************************/
+void BEEP_Off(void)
+{
+	TIM_SetCompare3(TIM4, 0);
+	beep_status = 0;
+}
+
+/*******************************************************************************
+ *            : BEEP_Volume_Increase
+ * 		   :
+ *              :
+ *              :
+ *******************************************************************************/
+void BEEP_Volume_Increase(void)
+{
+	if (beep_duty < beep_period - 10)
+	{
+		beep_duty += 10;
+		if (beep_status == 1)
+		{
+			TIM_SetCompare3(TIM4, beep_duty);
+		}
+	}
+}
+
+/*******************************************************************************
+ *            : BEEP_Volume_Decrease
+ * 		   : 小
+ *              :
+ *              :
+ *******************************************************************************/
+void BEEP_Volume_Decrease(void)
+{
+	if (beep_duty >= 10)
+	{
+		beep_duty -= 10;
+		if (beep_status == 1)
+		{
+			TIM_SetCompare3(TIM4, beep_duty);
+		}
+	}
+}
+
+/*******************************************************************************
+ *            : BEEP_Toggle
+ * 		   :
+ *              :
+ *              :
+ *******************************************************************************/
+void BEEP_Toggle(void)
+{
+	if (beep_status == 0)
+	{
+		BEEP_On();
+	}
+	else
+	{
+		BEEP_Off();
+	}
+}

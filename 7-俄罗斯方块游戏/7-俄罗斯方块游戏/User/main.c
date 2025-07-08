@@ -7,63 +7,67 @@
 #include "key.h"
 #include "tetris.h"
 
-
-
 int main()
 {
 	u8 i;
-	
+
 	SysTick_Init(72);
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);  //ÖÐ¶ÏÓÅÏÈ¼¶·Ö×é ·Ö2×é
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2); // ï¿½Ð¶ï¿½ï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½2ï¿½ï¿½
 	LED_Init();
 	USART1_Init(115200);
-	TFTLCD_Init();			//LCD³õÊ¼»¯
+	TFTLCD_Init(); // LCDï¿½ï¿½Ê¼ï¿½ï¿½
 	KEY_Init();
 	LCD_Clear(GREEN);
-	LCD_ShowPictureEx(0, 0, 240, 320); 
-	
-	TIM4_Init(10,7199);
-	while(key!= KEY_UP_PRESS) //µÈ´ý°´¼üK_UP°´ÏÂ
+	LCD_ShowPictureEx(0, 0, 240, 320);
+
+	TIM4_Init(10, 7199);
+	while (key != KEY_UP_PRESS) // ï¿½È´ï¿½ï¿½ï¿½ï¿½ï¿½K_UPï¿½ï¿½ï¿½ï¿½
 	{
-		FRONT_COLOR=RED;
-		LCD_ShowString(20,10,tftlcd_data.width,tftlcd_data.height,16,"Press K_UP key to Enter...");
+		FRONT_COLOR = RED;
+		LCD_ShowString(20, 10, tftlcd_data.width, tftlcd_data.height, 16, "Press K_UP key to Enter...");
 		delay_ms(200);
-		LCD_ShowString(20,10,tftlcd_data.width,tftlcd_data.height,16,"                          ");
+		LCD_ShowString(20, 10, tftlcd_data.width, tftlcd_data.height, 16, "                          ");
 		delay_ms(200);
 	}
-	TIM_Cmd(TIM4, DISABLE);  //Ê§ÄÜTIMx
-	
-	score_buf[0]=Game.score/100000+0x30;
-	score_buf[1]=Game.score%100000/10000+0x30;
-	score_buf[2]=Game.score%100000%10000/1000+0x30;
-	score_buf[3]=Game.score%100000%10000%1000/100+0x30;
-	score_buf[4]=Game.score%100000%10000%1000%100/10+0x30;
-	score_buf[5]=Game.score%100000%10000%1000%100%10+0x30;
-	score_buf[6]='\0';
+	TIM_Cmd(TIM4, DISABLE); // Ê§ï¿½ï¿½TIMx
 
-	level_buf[0]=Game.level/100+0x30;
-	level_buf[1]=Game.level%100/10+0x30;
-	level_buf[2]=Game.level%100%10+0x30;
-	level_buf[3]='\0';
+	score_buf[0] = Game.score / 100000 + 0x30;
+	score_buf[1] = Game.score % 100000 / 10000 + 0x30;
+	score_buf[2] = Game.score % 100000 % 10000 / 1000 + 0x30;
+	score_buf[3] = Game.score % 100000 % 10000 % 1000 / 100 + 0x30;
+	score_buf[4] = Game.score % 100000 % 10000 % 1000 % 100 / 10 + 0x30;
+	score_buf[5] = Game.score % 100000 % 10000 % 1000 % 100 % 10 + 0x30;
+	score_buf[6] = '\0';
+
+	level_buf[0] = Game.level / 100 + 0x30;
+	level_buf[1] = Game.level % 100 / 10 + 0x30;
+	level_buf[2] = Game.level % 100 % 10 + 0x30;
+	level_buf[3] = '\0';
 	Show_TetrisFace();
 	Start_Game();
-	TIM3_Init(5000,7199);
-	
-	while(1)
+	TIM3_Init(5000, 7199);
+
+	while (1)
 	{
-		key=KEY_Scan(0);
-		switch(key)
+		key = KEY_Scan(0);
+		switch (key)
 		{
-			case KEY1_PRESS:MoveLeft();break;
-			case KEY0_PRESS:MoveRight();break;
-			case KEY_UP_PRESS:Transform();break;	
-			default :
-					break;
+		case KEY1_PRESS:
+			MoveLeft();
+			break;
+		case KEY0_PRESS:
+			MoveRight();
+			break;
+		case KEY_UP_PRESS:
+			Transform();
+			break;
+		default:
+			break;
 		}
 		i++;
-		if(i%20==0)
+		if (i % 20 == 0)
 		{
-			LED1=!LED1;
+			LED1 = !LED1;
 		}
 		delay_ms(10);
 	}
