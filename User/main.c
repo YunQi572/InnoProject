@@ -62,13 +62,13 @@ u16 motor_power = 0;	   // 当前电机功率值(0-500)
 u16 motor_power_max = 499; // 最大电机功率值
 
 // 光敏控制电机联动变量
-u8 motor_auto_control = 0;  // 0: 手动控制, 1: 自动控制
-u16 motor_timer = 0;        // 电机运行计时器，单位：100ms
-u8 motor_running = 0;       // 0: 电机停止, 1: 电机运行
-u8 last_light_status = 0;   // 上次光照状态，0: 正常, 1: 暗
+u8 motor_auto_control = 0; // 0: 手动控制, 1: 自动控制
+u16 motor_timer = 0;	   // 电机运行计时器，单位：100ms
+u8 motor_running = 0;	   // 0: 电机停止, 1: 电机运行
+u8 last_light_status = 0;  // 上次光照状态，0: 正常, 1: 暗
 
 // 显示页面控制变量
-u8 display_page = 0;        // 0: 传感器数据页面, 1: 操作说明页面
+u8 display_page = 0; // 0: 传感器数据页面, 1: 操作说明页面
 
 char buf[32];
 
@@ -181,148 +181,163 @@ void HC05_Sta_Show(void)
 	}
 }
 
-// 显示温湿度和光照信息
-void Show_Sensor_Info(u8 temp, u8 humi, u8 lsens_value)
+// 初始化传感器数据显示页面的布局
+void Init_Sensor_Info_Layout(void)
 {
-	char buf[32];
-
 	// 清屏并显示标题
 	LCD_Clear(WHITE);
 	LCD_ShowString(50, 10, 150, 16, 16, (u8 *)"Sensor Data");
 
-	// 温湿度 - 局部刷新
-	LCD_Fill(10, 50, 220, 66, WHITE);
-	sprintf(buf, "Temp: %2dC Humi: %2d%%", temp, humi);
-	LCD_ShowString(10, 50, 220, 16, 16, (u8 *)buf);
+	// 显示固定的文本标签
+	LCD_ShowString(10, 50, 60, 16, 16, (u8 *)"Temp:");
+	LCD_ShowString(120, 50, 60, 16, 16, (u8 *)"Humi:");
+	LCD_ShowString(10, 80, 60, 16, 16, (u8 *)"Light:");
+	LCD_ShowString(10, 110, 70, 16, 16, (u8 *)"Status:");
+	LCD_ShowString(10, 140, 100, 16, 16, (u8 *)"Time:");
+	LCD_ShowString(10, 170, 60, 16, 16, (u8 *)"BEEP:");
+	LCD_ShowString(10, 200, 80, 16, 16, (u8 *)"Volume:");
+	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
+	LCD_ShowString(10, 260, 60, 16, 16, (u8 *)"BEEP:");
+	LCD_ShowString(10, 290, 60, 16, 16, (u8 *)"Delay:");
+	LCD_ShowString(10, 320, 60, 16, 16, (u8 *)"LED2:");
+	LCD_ShowString(10, 350, 100, 16, 16, (u8 *)"Motor Power:");
+	LCD_ShowString(10, 380, 70, 16, 16, (u8 *)"Music:");
+	LCD_ShowString(10, 410, 220, 16, 16, (u8 *)"KEY_UP: Switch Page");
+}
 
-	// 光敏值 - 局部刷新
-	LCD_Fill(10, 80, 220, 96, WHITE);
-	sprintf(buf, "Light: %3d", lsens_value);
-	LCD_ShowString(10, 80, 220, 16, 16, (u8 *)buf);
+// 只更新传感器数据页面的动态数值
+void Update_Sensor_Values(u8 temp, u8 humi, u8 lsens_value)
+{
+	char buf[32];
 
-	// 状态指示 - 局部刷新
-	LCD_Fill(10, 110, 220, 126, WHITE);
+	// 更新温湿度值 - 只刷新数值部分
+	LCD_Fill(70, 50, 110, 66, WHITE);
+	sprintf(buf, "%2dC", temp);
+	LCD_ShowString(70, 50, 40, 16, 16, (u8 *)buf);
+
+	LCD_Fill(180, 50, 220, 66, WHITE);
+	sprintf(buf, "%2d%%", humi);
+	LCD_ShowString(180, 50, 40, 16, 16, (u8 *)buf);
+
+	// 更新光敏值 - 只刷新数值部分
+	LCD_Fill(70, 80, 120, 96, WHITE);
+	sprintf(buf, "%3d", lsens_value);
+	LCD_ShowString(70, 80, 50, 16, 16, (u8 *)buf);
+
+	// 更新状态指示 - 只刷新状态文本部分
+	LCD_Fill(80, 110, 220, 126, WHITE);
 	if (temp > 28)
 	{
-		LCD_ShowString(10, 110, 220, 16, 16, (u8 *)"Status: Hot");
+		LCD_ShowString(80, 110, 140, 16, 16, (u8 *)"Hot");
 	}
 	else if (temp < 15)
 	{
-		LCD_ShowString(10, 110, 220, 16, 16, (u8 *)"Status: Cold");
+		LCD_ShowString(80, 110, 140, 16, 16, (u8 *)"Cold");
 	}
 	else
 	{
-		LCD_ShowString(10, 110, 220, 16, 16, (u8 *)"Status: Normal");
+		LCD_ShowString(80, 110, 140, 16, 16, (u8 *)"Normal");
 	}
 
-	// 电机状态显示 - 局部刷新
-	LCD_Fill(10, 140, 220, 156, WHITE);
-	if (motor_auto_control)
-	{
-		if (motor_running)
-		{
-			sprintf(buf, "Motor: AUTO RUN %d.%ds", motor_timer / 10, motor_timer % 10);
-		}
-		else
-		{
-			sprintf(buf, "Motor: AUTO STOP");
-		}
-	}
-	else
-	{
-		if (motor_running)
-		{
-			sprintf(buf, "Motor: MANUAL ON");
-		}
-		else
-		{
-			sprintf(buf, "Motor: MANUAL OFF");
-		}
-	}
-	LCD_ShowString(10, 140, 220, 16, 16, (u8 *)buf);
-
-	// 光敏控制状态显示 - 局部刷新
-	LCD_Fill(10, 170, 220, 186, WHITE);
-	if (lsens_value < 20)
-	{
-		LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"Light Control: DARK");
-	}
-	else
-	{
-		LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"Light Control: BRIGHT");
-	}
-
-	LCD_Fill(10, 140, 220, 156, WHITE);
+	// 更新时间
+	LCD_Fill(70, 140, 220, 156, WHITE);
 	sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", calendar.w_year, calendar.w_month, calendar.w_date, calendar.hour, calendar.min, calendar.sec);
-	LCD_ShowString(10, 140, 220, 16, 16, (u8 *)buf);
+	LCD_ShowString(70, 140, 150, 16, 16, (u8 *)buf);
 
-	// 显示蜂鸣器状态和音量
-	LCD_Fill(10, 170, 220, 186, WHITE);
-	sprintf(buf, "BEEP: %s", beep_status ? "ON" : "OFF");
-	LCD_ShowString(10, 170, 220, 16, 16, (u8 *)buf);
+	// 更新蜂鸣器状态
+	LCD_Fill(70, 170, 120, 186, WHITE);
+	sprintf(buf, "%s", beep_status ? "ON" : "OFF");
+	LCD_ShowString(70, 170, 50, 16, 16, (u8 *)buf);
 
-	// 显示蜂鸣器音量百分比
-	LCD_Fill(10, 200, 220, 216, WHITE);
-	sprintf(buf, "Volume: %d%%", beep_duty * 100 / beep_period);
-	LCD_ShowString(10, 200, 220, 16, 16, (u8 *)buf);
+	// 更新蜂鸣器音量百分比
+	LCD_Fill(90, 200, 150, 216, WHITE);
+	sprintf(buf, "%d%%", beep_duty * 100 / beep_period);
+	LCD_ShowString(90, 200, 60, 16, 16, (u8 *)buf);
 
-	// 显示当前模式
-	LCD_Fill(10, 230, 220, 246, WHITE);
-	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
-
-	// 显示BEEP状态或倒计时
-	LCD_Fill(10, 260, 220, 276, WHITE);
+	// 更新BEEP状态或倒计时
+	LCD_Fill(70, 260, 220, 276, WHITE);
 	if (beep_setting_mode)
 	{
-		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP: SETTING");
+		LCD_ShowString(70, 260, 150, 16, 16, (u8 *)"SETTING");
 
-		// 显示当前设置的延时时间
-		LCD_Fill(10, 290, 220, 306, WHITE);
-		sprintf(buf, "Delay: %d seconds", beep_setting_seconds);
-		LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
+		// 更新当前设置的延时时间
+		LCD_Fill(70, 290, 220, 306, WHITE);
+		sprintf(buf, "%d seconds", beep_setting_seconds);
+		LCD_ShowString(70, 290, 150, 16, 16, (u8 *)buf);
 	}
 	else if (beep_timer_active)
 	{
-		sprintf(buf, "BEEP: COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
-		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+		sprintf(buf, "COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
+		LCD_ShowString(70, 260, 150, 16, 16, (u8 *)buf);
 	}
 	else
 	{
-		sprintf(buf, "BEEP: %s", beep_status ? "ON" : "OFF");
-		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+		sprintf(buf, "%s", beep_status ? "ON" : "OFF");
+		LCD_ShowString(70, 260, 150, 16, 16, (u8 *)buf);
 	}
 
-	// 显示LED2状态
-	LCD_Fill(10, 320, 220, 336, WHITE);
-	sprintf(buf, "LED2: %s", LED2 ? "OFF" : "ON");
-	LCD_ShowString(10, 320, 220, 16, 16, (u8 *)buf);
+	// 更新LED2状态
+	LCD_Fill(70, 320, 120, 336, WHITE);
+	sprintf(buf, "%s", LED2 ? "OFF" : "ON");
+	LCD_ShowString(70, 320, 50, 16, 16, (u8 *)buf);
 
-	// 显示电机功率
-	LCD_Fill(10, 350, 220, 366, WHITE);
-	sprintf(buf, "Motor Power: %d", motor_power);
-	LCD_ShowString(10, 350, 220, 16, 16, (u8 *)buf);
+	// 更新电机功率
+	LCD_Fill(110, 350, 170, 366, WHITE);
+	sprintf(buf, "%d", motor_power);
+	LCD_ShowString(110, 350, 60, 16, 16, (u8 *)buf);
 
-	// 显示音乐播放状态
-	LCD_Fill(10, 380, 220, 396, WHITE);
+	// 更新音乐播放状态
+	LCD_Fill(80, 380, 220, 396, WHITE);
 	if (music_status == MUSIC_PLAY)
 	{
-		extern const char* song_names[];
-		sprintf(buf, "Music: %s", song_names[current_song]);
+		extern const char *song_names[];
+		sprintf(buf, "%s", song_names[current_song]);
 	}
 	else if (music_status == MUSIC_PAUSE)
 	{
-		extern const char* song_names[];
-		sprintf(buf, "Music: %s (Paused)", song_names[current_song]);
+		extern const char *song_names[];
+		sprintf(buf, "%s (Paused)", song_names[current_song]);
 	}
 	else
 	{
-		sprintf(buf, "Music: Stopped");
+		sprintf(buf, "Stopped");
 	}
-	LCD_ShowString(10, 380, 220, 16, 16, (u8 *)buf);
+	LCD_ShowString(80, 380, 140, 16, 16, (u8 *)buf);
 
-	// 显示页面切换提示
-	LCD_Fill(10, 410, 220, 426, WHITE);
-	LCD_ShowString(10, 410, 220, 16, 16, (u8 *)"KEY_UP: Switch Page");
+	// 更新光敏控制状态
+	if (motor_auto_control)
+	{
+		LCD_Fill(140, 350, 220, 366, WHITE);
+		if (motor_running)
+		{
+			sprintf(buf, "(AUTO %d.%ds)", motor_timer / 10, motor_timer % 10);
+			LCD_ShowString(140, 350, 80, 16, 16, (u8 *)buf);
+		}
+		else
+		{
+			LCD_ShowString(140, 350, 80, 16, 16, (u8 *)"(AUTO)");
+		}
+	}
+	else if (motor_running)
+	{
+		LCD_Fill(140, 350, 220, 366, WHITE);
+		LCD_ShowString(140, 350, 80, 16, 16, (u8 *)"(MANUAL ON)");
+	}
+	else
+	{
+		LCD_Fill(140, 350, 220, 366, WHITE);
+		LCD_ShowString(140, 350, 80, 16, 16, (u8 *)"(OFF)");
+	}
+}
+
+// 更新修改Show_Sensor_Info函数，使其调用上面两个函数
+void Show_Sensor_Info(u8 temp, u8 humi, u8 lsens_value)
+{
+	// 初始化布局
+	Init_Sensor_Info_Layout();
+
+	// 更新数值
+	Update_Sensor_Values(temp, humi, lsens_value);
 }
 
 // 显示操作说明页面
@@ -331,25 +346,25 @@ void Show_Help_Page(void)
 	// 清屏并显示标题
 	LCD_Clear(WHITE);
 	LCD_ShowString(50, 10, 150, 16, 16, (u8 *)"Operation Guide");
-	
+
 	// 显示按键操作说明
 	LCD_ShowString(10, 40, 220, 16, 16, (u8 *)"KEY0: Toggle Auto Control");
 	LCD_ShowString(10, 60, 220, 16, 16, (u8 *)"KEY1: Music Play/Pause");
 	LCD_ShowString(10, 80, 220, 16, 16, (u8 *)"KEY2: Switch Mode");
 	LCD_ShowString(10, 100, 220, 16, 16, (u8 *)"KEY_UP: Switch Page");
-	
+
 	// 显示红外遥控操作说明
 	LCD_ShowString(10, 130, 220, 16, 16, (u8 *)"IR3: Toggle Auto Control");
 	LCD_ShowString(10, 150, 220, 16, 16, (u8 *)"IR4: Manual Motor Control");
 	LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"IR7/8: Adjust Motor Power");
 	LCD_ShowString(10, 190, 220, 16, 16, (u8 *)"IR9: Emergency Stop");
 	LCD_ShowString(10, 210, 220, 16, 16, (u8 *)"IR_PREV/NEXT: Music Control");
-	
+
 	// 显示功能说明
 	LCD_ShowString(10, 240, 220, 16, 16, (u8 *)"Auto Control: Light < 20");
 	LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"Motor runs for 5 seconds");
 	LCD_ShowString(10, 280, 220, 16, 16, (u8 *)"Music Speed: 3x Fixed");
-	
+
 	// 显示页面切换提示
 	LCD_ShowString(10, 310, 220, 16, 16, (u8 *)"KEY_UP: Back to Data Page");
 }
@@ -512,7 +527,7 @@ void Process_IR_Command(void)
 				}
 			}
 		}
-		
+
 		// 根据红外代码控制LED2
 		if (hw_jsm == IR_KEY1)
 		{			  // 按键1
@@ -538,7 +553,7 @@ void Process_IR_Command(void)
 				beep_setting_seconds += 10;
 				if (beep_setting_seconds > 600)
 					beep_setting_seconds = 600; // 最大60秒
-				
+
 				sprintf(buf, "Delay: %ds", beep_setting_seconds);
 				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
 				printf("BEEP delay set to %d seconds\r\n", beep_setting_seconds);
@@ -667,13 +682,14 @@ int main()
 	lsens_value = Lsens_Get_Val();
 
 	// 初始化光敏控制变量
-	motor_auto_control = 0;  // 默认手动控制
-	motor_running = 0;       // 默认电机停止
-	motor_timer = 0;         // 计时器清零
+	motor_auto_control = 0;							// 默认手动控制
+	motor_running = 0;								// 默认电机停止
+	motor_timer = 0;								// 计时器清零
 	last_light_status = (lsens_value < 20) ? 1 : 0; // 根据初始光照状态设置
 
-	// 显示初始数据
-	Show_Sensor_Info(temp, humi, lsens_value);
+	// 显示初始数据 - 第一次显示时，初始化整个布局
+	Init_Sensor_Info_Layout();
+	Update_Sensor_Values(temp, humi, lsens_value);
 
 	while (1)
 	{
@@ -829,8 +845,9 @@ int main()
 				display_page = !display_page;
 				if (display_page == 0)
 				{
-					// 切换到传感器数据页面
-					Show_Sensor_Info(temp, humi, lsens_value);
+					// 切换到传感器数据页面 - 重新初始化整个布局
+					Init_Sensor_Info_Layout();
+					Update_Sensor_Values(temp, humi, lsens_value);
 				}
 				else
 				{
@@ -860,7 +877,7 @@ int main()
 				// 立即更新显示（只在数据页面时更新）
 				if (display_page == 0)
 				{
-					Show_Sensor_Info(temp, humi, lsens_value);
+					Update_Sensor_Values(temp, humi, lsens_value);
 				}
 			}
 			else if (key_val == KEY1_PRESS)
@@ -881,7 +898,7 @@ int main()
 				// 立即更新显示（只在数据页面时更新）
 				if (display_page == 0)
 				{
-					Show_Sensor_Info(temp, humi, lsens_value);
+					Update_Sensor_Values(temp, humi, lsens_value);
 				}
 			}
 
@@ -892,17 +909,17 @@ int main()
 				// DHT11读取成功，只在数据页面时更新显示
 				if (display_page == 0)
 				{
-					Show_Sensor_Info(temp, humi, lsens_value);
+					Update_Sensor_Values(temp, humi, lsens_value);
 				}
 			}
 
 			// 读取光敏传感器数据
 			lsens_value = Lsens_Get_Val();
 
-			// 更新显示（减少刷新频率，只在数据页面时更新）
+			// 更新显示（减少刷新频率，只在数据页面时更新数值，不重新绘制整个屏幕）
 			if (t % 20 == 0 && display_page == 0) // 每2秒刷新一次（20 * 100ms = 2000ms）
 			{
-				Show_Sensor_Info(temp, humi, lsens_value);
+				Update_Sensor_Values(temp, humi, lsens_value);
 			}
 		}
 		else
