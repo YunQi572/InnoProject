@@ -1,4 +1,5 @@
 #include "beep.h"
+#include "music.h"
 #include "SysTick.h"
 
 // PWM parameters for volume control
@@ -58,8 +59,13 @@ void BEEP_On(void)
 {
 	if (beep_status == 0)
 	{
-		TIM_SetCompare3(TIM4, beep_duty);
-		beep_status = 1;
+		// 检查是否正在播放音乐，如果是则不启动普通蜂鸣器
+		extern u8 music_status;
+		if (music_status == MUSIC_STOP)
+		{
+			TIM_SetCompare3(TIM4, beep_duty);
+			beep_status = 1;
+		}
 	}
 }
 

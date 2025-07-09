@@ -41,10 +41,11 @@
 ".\obj\hc05.o"
 ".\obj\usart3.o"
 ".\obj\time.o"
+".\obj\music.o"
 ".\obj\system.o"
 ".\obj\systick.o"
 ".\obj\usart.o"
 --library_type=microlib --strict --scatter ".\Obj\Template.sct"
---summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--summary_stderr --info summarysizes --map --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
 --list ".\Obj\Template.map" -o .\Obj\Template.axf
