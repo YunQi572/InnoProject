@@ -40,6 +40,8 @@
 .\obj\main.o: User\../APP/hc05/hc05.h
 .\obj\main.o: User\../APP/hwjs/hwjs.h
 .\obj\main.o: User\../APP/pwm/pwm.h
+.\obj\main.o: User\../APP/ws2812/ws2812.h
+.\obj\main.o: User\../APP/ws2812/rgb_display.h
 .\obj\main.o: .\Public\usart.h
 .\obj\main.o: D:\app\SummerLearning\Keil5\ARM\ARMCC\Bin\..\include\stdio.h
 .\obj\main.o: .\APP\usart3\usart3.h

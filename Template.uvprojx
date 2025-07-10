@@ -692,6 +692,16 @@
               <FileType>5</FileType>
               <FilePath>.\APP\beep\music.h</FilePath>
             </File>
+            <File>
+              <FileName>rgb_display.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\APP\ws2812\rgb_display.c</FilePath>
+            </File>
+            <File>
+              <FileName>rgb_display.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\APP\ws2812\rgb_display.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

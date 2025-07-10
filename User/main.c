@@ -10,6 +10,8 @@
 #include "../APP/hc05/hc05.h"
 #include "../APP/hwjs/hwjs.h"
 #include "../APP/pwm/pwm.h"
+#include "../APP/ws2812/ws2812.h"
+#include "../APP/ws2812/rgb_display.h"
 #include "usart.h"
 #include "usart3.h"
 #include "string.h"
@@ -53,6 +55,10 @@ u8 sendbuf[20];
 u16 beep_delay = 0;		  // 延时计数器，单位：100ms
 u8 beep_timer_active = 0; // 0: 未激活, 1: 已激活
 
+// RGB爱心显示控制变量
+u16 heart_display_timer = 0; // 爱心显示计时器，单位：100ms
+u8 heart_display_active = 0; // 0: 未激活, 1: 已激活
+
 // BEEP设置模式
 u8 beep_setting_mode = 0;	  // 0: 非设置模式, 1: 设置模式
 u16 beep_setting_seconds = 0; // 设置的延时秒数
@@ -71,6 +77,20 @@ u8 last_light_status = 0;  // 上次光照状态，0: 正常, 1: 暗
 u8 display_page = 0; // 0: 传感器数据页面, 1: 操作说明页面
 
 char buf[32];
+
+// 数字0-9对应的颜色数组（每个数字都有不同的颜色）
+const u32 digit_colors[10] = {
+	RGB_COLOR_RED,	   // 0 - 红色
+	RGB_COLOR_GREEN,   // 1 - 绿色
+	RGB_COLOR_BLUE,	   // 2 - 蓝色
+	RGB_COLOR_YELLOW,  // 3 - 黄色
+	RGB_COLOR_PURPLE,  // 4 - 紫色
+	RGB_COLOR_CYAN,	   // 5 - 青色
+	RGB_COLOR_ORANGE,  // 6 - 橙色
+	RGB_COLOR_PINK,	   // 7 - 粉色
+	RGB_COLOR_MAGENTA, // 8 - 品红色
+	RGB_COLOR_LIME	   // 9 - 青柠色
+};
 
 // 初始化蓝牙模块，可被KEY2中断
 // 返回值: 0=成功, 1=失败, 2=被中断
@@ -349,6 +369,7 @@ void Show_Help_Page(void)
 
 	// 显示按键操作说明
 	LCD_ShowString(10, 40, 220, 16, 16, (u8 *)"KEY0: Toggle Auto Control");
+	LCD_ShowString(10, 320, 220, 16, 16, (u8 *)"KEY0 (Long): RGB LED Demo");
 	LCD_ShowString(10, 60, 220, 16, 16, (u8 *)"KEY1: Music Play/Pause");
 	LCD_ShowString(10, 80, 220, 16, 16, (u8 *)"KEY2: Switch Mode");
 	LCD_ShowString(10, 100, 220, 16, 16, (u8 *)"KEY_UP: Switch Page");
@@ -356,17 +377,19 @@ void Show_Help_Page(void)
 	// 显示红外遥控操作说明
 	LCD_ShowString(10, 130, 220, 16, 16, (u8 *)"IR3: Toggle Auto Control");
 	LCD_ShowString(10, 150, 220, 16, 16, (u8 *)"IR4: Manual Motor Control");
-	LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"IR7/8: Adjust Motor Power");
-	LCD_ShowString(10, 190, 220, 16, 16, (u8 *)"IR9: Emergency Stop");
-	LCD_ShowString(10, 210, 220, 16, 16, (u8 *)"IR_PREV/NEXT: Music Control");
+	LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"IR5: Decrease BEEP Delay");
+	LCD_ShowString(10, 190, 220, 16, 16, (u8 *)"IR6: Start BEEP+RGB Timer");
+	LCD_ShowString(10, 210, 220, 16, 16, (u8 *)"IR7/8: Adjust Motor Power");
+	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"IR9: Emergency Stop");
+	LCD_ShowString(10, 250, 220, 16, 16, (u8 *)"IR_PREV/NEXT: Music Control");
 
 	// 显示功能说明
-	LCD_ShowString(10, 240, 220, 16, 16, (u8 *)"Auto Control: Light < 20");
-	LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"Motor runs for 5 seconds");
-	LCD_ShowString(10, 280, 220, 16, 16, (u8 *)"Music Speed: 3x Fixed");
+	LCD_ShowString(10, 270, 220, 16, 16, (u8 *)"Auto Control: Light < 20");
+	LCD_ShowString(10, 290, 220, 16, 16, (u8 *)"Motor runs for 5 seconds");
+	LCD_ShowString(10, 310, 220, 16, 16, (u8 *)"RGB shows countdown+heart");
 
 	// 显示页面切换提示
-	LCD_ShowString(10, 310, 220, 16, 16, (u8 *)"KEY_UP: Back to Data Page");
+	LCD_ShowString(10, 340, 220, 16, 16, (u8 *)"KEY_UP: Back to Data Page");
 }
 
 // 显示蓝牙界面
@@ -550,9 +573,9 @@ void Process_IR_Command(void)
 		{ // 按键4 - 增加延时时间
 			if (beep_setting_mode)
 			{
-				beep_setting_seconds += 10;
+				beep_setting_seconds += 1;
 				if (beep_setting_seconds > 600)
-					beep_setting_seconds = 600; // 最大60秒
+					beep_setting_seconds = 600; // 最大600秒
 
 				sprintf(buf, "Delay: %ds", beep_setting_seconds);
 				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
@@ -563,9 +586,8 @@ void Process_IR_Command(void)
 		{ // 按键5 - 减少延时时间
 			if (beep_setting_mode && beep_setting_seconds > 0)
 			{
-				if (beep_setting_seconds > 10)
-					beep_setting_seconds -= 10;
-				else
+				beep_setting_seconds -= 1;
+				if (beep_setting_seconds < 0)
 					beep_setting_seconds = 0;
 				sprintf(buf, "Delay: %ds", beep_setting_seconds);
 				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
@@ -581,6 +603,20 @@ void Process_IR_Command(void)
 				beep_setting_mode = 0;
 				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)"BEEP Timer Started!");
 				printf("BEEP timer started for %d seconds\r\n", beep_setting_seconds);
+
+				// 初始化RGB LED并显示倒计时起始数字（五彩斑斓效果）
+				RGB_LED_Init();
+				printf("RGB LED initialized for countdown\r\n");
+				if (beep_setting_seconds <= 9)
+				{
+					RGB_ShowCharNum_Debug(beep_setting_seconds, 0); // 颜色参数已不使用
+				}
+				else
+				{
+					// 如果超过9秒，显示个位数
+					u8 digit = beep_setting_seconds % 10;
+					RGB_ShowCharNum_Debug(digit, 0); // 颜色参数已不使用
+				}
 			}
 		}
 		else if (hw_jsm == IR_KEY7)
@@ -629,6 +665,50 @@ void Process_IR_Command(void)
 	}
 }
 
+// RGB LED Demo Function - Displays the sequence of characters
+void RGB_LED_Demo(void)
+{
+	u8 key_val;
+	u8 demo_running = 1;
+	u8 current_char = 0;
+	const u8 total_chars = 10; // 9 letters + 1 heart
+	u16 i;
+
+	printf("Starting RGB LED Demo...\r\n");
+
+	// Initialize RGB LED module
+	RGB_LED_Init();
+
+	printf("RGB LED initialized. Displaying character sequence...\r\n");
+	printf("Press any key to exit the demo.\r\n");
+
+	// Display each character and heart in sequence, with different colors
+	while (demo_running)
+	{
+		// Display current character with appropriate color
+		RGB_ShowCustomChar(custom_char_patterns[current_char], display_colors[current_char]);
+
+		// Move to next character
+		current_char = (current_char + 1) % total_chars;
+
+		// Check for key press to exit demo
+		for (i = 0; i < 8; i++) // Check for key press for 800ms (8 * 100ms)
+		{
+			delay_ms(100);
+			key_val = KEY_Scan(0);
+			if (key_val != 0) // Any key pressed
+			{
+				demo_running = 0;
+				break;
+			}
+		}
+	}
+
+	// Clear RGB LEDs before exiting
+	RGB_LED_Clear();
+	printf("RGB LED Demo stopped.\r\n");
+}
+
 int main()
 {
 	u8 temp = 0, humi = 0;
@@ -638,6 +718,8 @@ int main()
 	u8 reclen = 0;
 	u8 bt_init_result = 0;
 	char buf[32]; // 显示缓冲区
+	u16 press_time;
+	u8 remaining_seconds; // 倒计时剩余秒数
 
 	// 系统初始化
 	SysTick_Init(72);
@@ -691,6 +773,9 @@ int main()
 	Init_Sensor_Info_Layout();
 	Update_Sensor_Values(temp, humi, lsens_value);
 
+	// Display a message that RGB LED demo can be activated with KEY0
+	LCD_ShowString(10, 440, 220, 16, 16, (u8 *)"Press KEY0 to start RGB demo");
+
 	while (1)
 	{
 		// 处理蜂鸣器定时器
@@ -703,6 +788,11 @@ int main()
 				{
 					BEEP_On(); // 延时结束，打开蜂鸣器
 					beep_timer_active = 0;
+
+					// 显示五彩斑斓的爱心并启动爱心显示定时器
+					RGB_ShowHeart(0);		  // 颜色参数已不使用，自动五彩斑斓
+					heart_display_timer = 30; // 显示3秒 (30 * 100ms)
+					heart_display_active = 1;
 
 					// 更新显示
 					if (current_mode == 0 && display_page == 0)
@@ -729,6 +819,36 @@ int main()
 						sprintf(buf, "BEEP: COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
 						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
 					}
+
+					// 在RGB模块上显示倒计时数字（五彩斑斓效果）
+					remaining_seconds = beep_delay / 10;
+					printf("Countdown: %d seconds remaining\r\n", remaining_seconds);
+					if (remaining_seconds <= 9)
+					{
+						RGB_ShowCharNum_Debug(remaining_seconds, 0); // 颜色参数已不使用
+					}
+					else
+					{
+						// 如果超过9秒，显示个位数
+						u8 digit = remaining_seconds % 10;
+						RGB_ShowCharNum_Debug(digit, 0); // 颜色参数已不使用
+					}
+				}
+			}
+		}
+
+		// 处理RGB爱心显示定时器
+		if (heart_display_active)
+		{
+			if (heart_display_timer > 0)
+			{
+				heart_display_timer--;
+				if (heart_display_timer == 0)
+				{
+					// 爱心显示时间结束，清除RGB显示
+					RGB_LED_Clear();
+					heart_display_active = 0;
+					printf("Heart display finished\r\n");
 				}
 			}
 		}
@@ -857,23 +977,70 @@ int main()
 			}
 			else if (key_val == KEY0_PRESS)
 			{
-				// KEY0: 切换光敏自动控制模式
-				motor_auto_control = !motor_auto_control;
-				if (motor_auto_control)
+				// Check if KEY0 was held for a long press (>1 second)
+				delay_ms(100); // Debounce delay
+				if (KEY0 == 0) // Still pressed
 				{
-					printf("Motor auto control enabled\r\n");
-					// 切换到自动模式时，停止手动控制
-					motor_running = 0;
-					TIM_SetCompare2(TIM3, motor_power_max);
+					press_time = 0;
+					while (KEY0 == 0 && press_time < 10) // Check for up to 1 second
+					{
+						delay_ms(100);
+						press_time++;
+					}
+
+					if (press_time >= 10) // Long press - start RGB LED demo
+					{
+						LCD_Clear(WHITE);
+						LCD_ShowString(50, 200, 180, 24, 24, (u8 *)"Starting RGB Demo");
+						delay_ms(500);
+						RGB_LED_Demo(); // This will enter a loop until a key is pressed
+						// After demo, refresh the screen
+						if (display_page == 0)
+						{
+							Show_Sensor_Info(temp, humi, lsens_value);
+						}
+						else
+						{
+							Show_Help_Page();
+						}
+					}
+					else // Short press
+					{
+						// KEY0: 切换光敏自动控制模式
+						motor_auto_control = !motor_auto_control;
+						if (motor_auto_control)
+						{
+							printf("Motor auto control enabled\r\n");
+							motor_running = 0;
+							TIM_SetCompare2(TIM3, motor_power_max);
+						}
+						else
+						{
+							printf("Motor manual control enabled\r\n");
+							motor_running = 0;
+							motor_timer = 0;
+							TIM_SetCompare2(TIM3, motor_power_max);
+						}
+					}
 				}
-				else
+				else // It was a very short press, treat as normal toggle
 				{
-					printf("Motor manual control enabled\r\n");
-					// 切换到手动模式时，停止自动控制
-					motor_running = 0;
-					motor_timer = 0;
-					TIM_SetCompare2(TIM3, motor_power_max);
+					motor_auto_control = !motor_auto_control;
+					if (motor_auto_control)
+					{
+						printf("Motor auto control enabled\r\n");
+						motor_running = 0;
+						TIM_SetCompare2(TIM3, motor_power_max);
+					}
+					else
+					{
+						printf("Motor manual control enabled\r\n");
+						motor_running = 0;
+						motor_timer = 0;
+						TIM_SetCompare2(TIM3, motor_power_max);
+					}
 				}
+
 				// 立即更新显示（只在数据页面时更新）
 				if (display_page == 0)
 				{

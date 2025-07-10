@@ -42,6 +42,7 @@
 ".\obj\usart3.o"
 ".\obj\time.o"
 ".\obj\music.o"
+".\obj\rgb_display.o"
 ".\obj\system.o"
 ".\obj\systick.o"
 ".\obj\usart.o"
