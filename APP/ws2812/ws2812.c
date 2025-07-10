@@ -385,7 +385,7 @@ void RGB_Draw_Circle(u16 x0, u16 y0, u8 r, u32 color)
 
 void RGB_ShowCharNum(u8 num, u32 color)
 {
-	u8 i = 0, j = 0;
+	u8 i = 0, j;
 	u8 x = 0, y = 0;
 	u8 temp = 0;
 	u8 color_index = 0; // 彩虹颜色索引
@@ -393,6 +393,7 @@ void RGB_ShowCharNum(u8 num, u32 color)
 	// 先清除缓冲区
 	RGB_Buffer_Clear();
 
+	// 使用原始代码的坐标映射逻辑：按列填充，先填满y轴再填x轴
 	for (j = 0; j < 5; j++)
 	{
 		temp = g_rgb_num_buf[num][j];
@@ -414,7 +415,7 @@ void RGB_ShowCharNum(u8 num, u32 color)
 				x++;
 				if (x == RGB_LED_XWIDTH)
 				{
-					// 在最后更新屏幕
+					// 确保屏幕更新
 					RGB_Screen_Update();
 					return;
 				}
@@ -485,11 +486,12 @@ void RGB_ShowCharNum_Debug(u8 num, u32 color)
 	u8 temp = 0;
 	u8 color_index = 0; // 彩虹颜色索引
 
-	printf("Displaying number %d with rainbow colors\r\n", num);
+	printf("Displaying number %d with rainbow colors (original position)\r\n", num);
 
 	// 先清除缓冲区
 	RGB_Buffer_Clear();
 
+	// 使用原始代码的坐标映射逻辑：按列填充，先填满y轴再填x轴
 	for (j = 0; j < 5; j++)
 	{
 		temp = g_rgb_num_buf[num][j];
@@ -517,16 +519,17 @@ void RGB_ShowCharNum_Debug(u8 num, u32 color)
 				if (x == RGB_LED_XWIDTH)
 				{
 					printf("\r\n");
-					// 在最后更新屏幕
+					// 确保屏幕更新
 					RGB_Screen_Update();
-					printf("Rainbow number display sent to RGB\r\n");
+					printf("Rainbow number display sent to RGB (original position)\r\n");
 					return;
 				}
 			}
 		}
 		printf("\r\n");
 	}
+
 	// 确保屏幕更新
 	RGB_Screen_Update();
-	printf("Rainbow number display sent to RGB\r\n");
+	printf("Rainbow number display sent to RGB (original position)\r\n");
 }

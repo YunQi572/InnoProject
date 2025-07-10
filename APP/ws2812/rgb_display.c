@@ -43,34 +43,24 @@ const u32 display_colors[] = {
 void RGB_ShowCustomChar(const u8 *pattern, u32 color)
 {
     u8 i, j;
-    u8 x = 0, y = 0;
     u8 temp = 0;
 
-    RGB_LED_Clear(); // Clear previous display
+    RGB_Buffer_Clear(); // Clear previous display
 
+    // 正确的坐标映射：j控制行(y)，i控制列(x)
     for (j = 0; j < 5; j++)
     {
         temp = pattern[j];
-        for (i = 0; i < 8; i++) // Process all 8 bits of each byte
+        for (i = 0; i < 5; i++)
         {
-            if (i < 5) // Only use the first 5 bits for 5x5 display
-            {
-                if (temp & 0x80)
-                    RGB_DrawDotColor(x, y, 1, color); // Set LED on
-                else
-                    RGB_DrawDotColor(x, y, 0, 0); // Set LED off
-                x++;
-                if (x == RGB_LED_XWIDTH)
-                {
-                    x = 0;
-                    y++;
-                    if (y == RGB_LED_YHIGH)
-                        return;
-                }
-            }
-            temp <<= 1; // Shift to process next bit
+            if (temp & 0x80)
+                RGB_DrawDotColor(i, j, 1, color); // Set LED on (i=x, j=y)
+            else
+                RGB_DrawDotColor(i, j, 0, 0); // Set LED off
+            temp <<= 1;                       // Shift to process next bit
         }
     }
+    RGB_Screen_Update(); // Update the display
 }
 
 // Heart shape function removed to avoid duplicate definition

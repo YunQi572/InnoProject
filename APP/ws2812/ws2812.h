@@ -41,4 +41,11 @@ void RGB_Screen_Update(void);
 void RGB_Set_Pixel(u8 x, u8 y, u32 color);
 void RGB_ShowTest(u32 color);
 void RGB_ShowCharNum_Debug(u8 num, u32 color);
+
+// RGB_display.c中定义的函数和数组声明
+void RGB_ShowCustomChar(const u8 *pattern, u32 color);
+void RGB_DisplaySequence(u16 delay_duration_ms);
+void RGB_StartDisplay(void);
+extern const u8 custom_char_patterns[][5];
+extern const u32 display_colors[];
 #endif

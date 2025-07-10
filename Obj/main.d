@@ -32,7 +32,6 @@
 .\obj\main.o: .\Public\SysTick.h
 .\obj\main.o: .\APP\lsens\lsens.h
 .\obj\main.o: User\../APP/tftlcd/tftlcd.h
-.\obj\main.o: User\../APP/tftlcd/bk_image.h
 .\obj\main.o: User\../APP/dht11/dht11.h
 .\obj\main.o: User\../APP/rtc/rtc.h
 .\obj\main.o: User\../APP/key/key.h
