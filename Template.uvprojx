@@ -558,6 +558,11 @@
               <FilePath>.\APP\tftlcd\tftlcd.c</FilePath>
             </File>
             <File>
+              <FileName>bk_image.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\APP\tftlcd\bk_image.c</FilePath>
+            </File>
+            <File>
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\APP\oled\oled.c</FilePath>
@@ -701,6 +706,11 @@
               <FileName>rgb_display.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\APP\ws2812\rgb_display.h</FilePath>
+            </File>
+            <File>
+              <FileName>bk_image.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\APP\tftlcd\bk_image.h</FilePath>
             </File>
           </Files>
         </Group>

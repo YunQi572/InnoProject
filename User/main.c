@@ -2,6 +2,7 @@
 #include "SysTick.h"
 #include "lsens.h"
 #include "../APP/tftlcd/tftlcd.h"
+#include "../APP/tftlcd/bk_image.h"
 #include "../APP/dht11/dht11.h"
 #include "../APP/rtc/rtc.h"
 #include "../APP/key/key.h"
@@ -17,6 +18,7 @@
 #include "string.h"
 #include "led.h"
 #include "stdlib.h"
+#include "math.h"
 
 // 声明外部函数
 extern void USART3_Init(u32 bound);
@@ -26,6 +28,17 @@ extern void u3_printf(char *fmt, ...);
 extern u8 beep_status;
 extern u16 beep_duty;
 extern u16 beep_period;
+
+// 函数前向声明
+void Show_Sensor_Info(u8 temp, u8 humi, u8 lsens_value);
+void Show_Help_Page(void);
+void Show_BT_Info(void);
+void Init_Sensor_Info_Layout(void);
+void Update_Sensor_Values(u8 temp, u8 humi, u8 lsens_value);
+void Exit_Clock_Mode(void);
+
+// 时钟相关常量
+#define PI 3.1415926
 
 // 红外遥控按键编码
 #define IR_KEY1 0x00FF30CF // 按键1的编码（根据实际遥控器可能需要修改）
@@ -40,7 +53,7 @@ extern u16 beep_period;
 #define IR_PREV 0x00FF02FD // 上一首按钮
 #define IR_NEXT 0x00FFC23D // 下一首按钮
 
-// 当前功能模式: 0=传感器模式, 1=蓝牙模式
+// 当前功能模式: 0=传感器模式, 1=蓝牙模式, 2=时钟模式
 u8 current_mode = 0;
 
 // 蓝牙初始化状态: 0=未初始化, 1=已初始化成功, 2=初始化失败, 3=初始化被中断
@@ -76,6 +89,14 @@ u8 last_light_status = 0;  // 上次光照状态，0: 正常, 1: 暗
 // 显示页面控制变量
 u8 display_page = 0; // 0: 传感器数据页面, 1: 操作说明页面
 
+// 超时控制变量
+u16 idle_timer = 0;	   // 空闲计时器，单位：100ms
+u16 idle_timeout = 50; // 5秒超时(50 * 100ms = 5000ms)
+
+// 时钟界面控制变量
+u8 clock_mode_active = 0; // 0: 非时钟模式, 1: 时钟模式激活
+u8 last_sec = 0xFF;		  // 上一秒钟值，用于检测秒钟变化
+
 char buf[32];
 
 // 数字0-9对应的颜色数组（每个数字都有不同的颜色）
@@ -91,6 +112,223 @@ const u32 digit_colors[10] = {
 	RGB_COLOR_MAGENTA, // 8 - 品红色
 	RGB_COLOR_LIME	   // 9 - 青柠色
 };
+
+// 时钟绘制函数
+void get_circle(int x, int y, int r, int col)
+{
+	int xc = 0;
+	int yc, p;
+	yc = r;
+	p = 3 - (r << 1);
+	while (xc <= yc)
+	{
+		LCD_DrawFRONT_COLOR(x + xc, y + yc, col);
+		LCD_DrawFRONT_COLOR(x + xc, y - yc, col);
+		LCD_DrawFRONT_COLOR(x - xc, y + yc, col);
+		LCD_DrawFRONT_COLOR(x - xc, y - yc, col);
+		LCD_DrawFRONT_COLOR(x + yc, y + xc, col);
+		LCD_DrawFRONT_COLOR(x + yc, y - xc, col);
+		LCD_DrawFRONT_COLOR(x - yc, y + xc, col);
+		LCD_DrawFRONT_COLOR(x - yc, y - xc, col);
+		if (p < 0)
+		{
+			p += (xc++ << 2) + 6;
+		}
+		else
+			p += ((xc++ - yc--) << 2) + 10;
+	}
+}
+
+void draw_circle() // 画圆
+{
+	// 时钟位置居中：屏幕中心(120, 240)
+	get_circle(120, 240, 100, YELLOW);
+	get_circle(120, 240, 99, YELLOW);
+	get_circle(120, 240, 98, YELLOW);
+	get_circle(120, 240, 97, YELLOW);
+	get_circle(120, 240, 5, YELLOW);
+}
+
+void draw_dotline() // 画格点
+{
+	u8 i;
+	u8 rome[][3] = {"12", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"}; // 表盘数字
+	int x1, y1, x2, y2, x3, y3;
+	for (i = 0; i < 60; i++)
+	{
+		x1 = (int)(120 + (sin(i * PI / 30) * 92));
+		y1 = (int)(240 - (cos(i * PI / 30) * 92));
+		x2 = (int)(120 + (sin(i * PI / 30) * 97));
+		y2 = (int)(240 - (cos(i * PI / 30) * 97));
+		FRONT_COLOR = RED;
+		LCD_DrawLine(x1, y1, x2, y2);
+
+		if (i % 5 == 0)
+		{
+			x1 = (int)(120 + (sin(i * PI / 30) * 85));
+			y1 = (int)(240 - (cos(i * PI / 30) * 85));
+			x2 = (int)(120 + (sin(i * PI / 30) * 97));
+			y2 = (int)(240 - (cos(i * PI / 30) * 97));
+			LCD_DrawLine(x1, y1, x2, y2);
+
+			x3 = (int)(112 + (sin((i)*PI / 30) * 80));
+			y3 = (int)(232 - (cos((i)*PI / 30) * 80));
+			FRONT_COLOR = YELLOW;
+			LCD_ShowString(x3, y3, tftlcd_data.width, tftlcd_data.height, 16, rome[i / 5]);
+		}
+	}
+}
+
+void draw_hand(int hhour, int mmin, int ssec) // 画指针
+{
+	int xhour, yhour, xminute, yminute, xsecond, ysecond; // 表心坐标系指针坐标
+	xhour = (int)(60 * sin(hhour * PI / 6 + mmin * PI / 360 + ssec * PI / 1800));
+	yhour = (int)(60 * cos(hhour * PI / 6 + mmin * PI / 360 + ssec * PI / 1800));
+	xminute = (int)(90 * sin(mmin * PI / 30 + ssec * PI / 1800));
+	yminute = (int)(90 * cos(mmin * PI / 30 + ssec * PI / 1800));
+	xsecond = (int)(100 * sin(ssec * PI / 30));
+	ysecond = (int)(100 * cos(ssec * PI / 30));
+
+	FRONT_COLOR = RED;
+	LCD_DrawLine(120 + xhour, 240 - yhour, 120 - xhour / 6, 240 + yhour / 6);
+	FRONT_COLOR = BLUE;
+	LCD_DrawLine(120 + xminute, 240 - yminute, 120 - xminute / 4, 240 + yminute / 4);
+	FRONT_COLOR = GREEN;
+	LCD_DrawLine(120 + xsecond, 240 - ysecond, 120 - xsecond / 3, 240 + ysecond / 3);
+}
+
+void draw_hand_clear(int hhour, int mmin, int ssec) // 擦指针
+{
+	int xhour, yhour, xminute, yminute, xsecond, ysecond; // 表心坐标系指针坐标
+	xhour = (int)(60 * sin(hhour * PI / 6 + mmin * PI / 360 + ssec * PI / 1800));
+	yhour = (int)(60 * cos(hhour * PI / 6 + mmin * PI / 360 + ssec * PI / 1800));
+	xminute = (int)(90 * sin(mmin * PI / 30 + ssec * PI / 1800));
+	yminute = (int)(90 * cos(mmin * PI / 30 + ssec * PI / 1800));
+	xsecond = (int)(100 * sin(ssec * PI / 30));
+	ysecond = (int)(100 * cos(ssec * PI / 30));
+
+	FRONT_COLOR = BLACK;
+	LCD_DrawLine(120 + xhour, 240 - yhour, 120 - xhour / 6, 240 + yhour / 6);
+	LCD_DrawLine(120 + xminute, 240 - yminute, 120 - xminute / 4, 240 + yminute / 4);
+	LCD_DrawLine(120 + xsecond, 240 - ysecond, 120 - xsecond / 3, 240 + ysecond / 3);
+}
+
+// 初始化时钟界面
+void Init_Clock_Display(void)
+{
+	LCD_Clear(BLACK);
+	FRONT_COLOR = YELLOW;
+	BACK_COLOR = BLACK;
+
+	// 显示标题
+	LCD_ShowString(60, 50, 200, 24, 24, (u8 *)"Digital Clock");
+
+	// 绘制表盘
+	draw_circle();
+	draw_dotline();
+
+	// 显示操作提示
+	LCD_ShowString(40, 400, 200, 16, 16, (u8 *)"Press any key to return");
+
+	clock_mode_active = 1;
+	last_sec = 0xFF; // 强制首次更新
+	printf("Clock mode activated\r\n");
+}
+
+// 更新时钟显示
+void Update_Clock_Display(void)
+{
+	char time_buf[16];
+
+	// 只在秒钟变化时更新
+	if (calendar.sec != last_sec)
+	{
+		// 擦除旧指针
+		if (last_sec != 0xFF)
+		{
+			draw_hand_clear(calendar.hour, calendar.min, last_sec);
+		}
+
+		// 重新绘制表盘（确保表盘完整）
+		draw_circle();
+		draw_dotline();
+
+		// 绘制新指针
+		draw_hand(calendar.hour, calendar.min, calendar.sec);
+
+		// 显示数字时间
+		sprintf(time_buf, "%.2d:%.2d:%.2d", calendar.hour, calendar.min, calendar.sec);
+		LCD_Fill(80, 100, 160, 116, BLACK); // 清除旧时间显示
+		FRONT_COLOR = YELLOW;
+		LCD_ShowString(80, 100, 200, 16, 16, (u8 *)time_buf);
+
+		// 显示日期
+		sprintf(time_buf, "%04d-%02d-%02d", calendar.w_year, calendar.w_month, calendar.w_date);
+		LCD_Fill(60, 120, 180, 136, BLACK); // 清除旧日期显示
+		LCD_ShowString(60, 120, 200, 16, 16, (u8 *)time_buf);
+
+		last_sec = calendar.sec;
+	}
+}
+
+// 退出时钟模式
+void Exit_Clock_Mode(void)
+{
+	clock_mode_active = 0;
+	printf("Clock mode deactivated\r\n");
+
+	// 根据之前的模式恢复界面
+	if (current_mode == 0)
+	{
+		// 返回传感器模式
+		if (display_page == 0)
+		{
+			// 需要重新读取传感器数据
+			u8 temp = 0, humi = 0, lsens_value = 0;
+			DHT11_Read_Data(&temp, &humi);
+			lsens_value = Lsens_Get_Val();
+			Show_Sensor_Info(temp, humi, lsens_value);
+		}
+		else
+		{
+			Show_Help_Page();
+		}
+	}
+	else if (current_mode == 1)
+	{
+		// 返回蓝牙模式
+		Show_BT_Info();
+	}
+}
+
+// 重置空闲计时器（当有用户操作时调用）
+void Reset_Idle_Timer(void)
+{
+	idle_timer = 0;
+}
+
+// 检查是否有任何用户操作（仅在时钟模式下使用）
+u8 Check_Clock_Mode_Activity(void)
+{
+	u8 key_val = KEY_Scan(0);
+
+	// 检查按键
+	if (key_val != 0)
+	{
+		Exit_Clock_Mode();
+		return 1; // 返回1表示有活动且已处理
+	}
+
+	// 检查红外遥控
+	if (hw_jsbz)
+	{
+		hw_jsbz = 0; // 清除红外标志
+		Exit_Clock_Mode();
+		return 1; // 返回1表示有活动且已处理
+	}
+
+	return 0; // 无用户活动
+}
 
 // 初始化蓝牙模块，可被KEY2中断
 // 返回值: 0=成功, 1=失败, 2=被中断
@@ -204,25 +442,26 @@ void HC05_Sta_Show(void)
 // 初始化传感器数据显示页面的布局
 void Init_Sensor_Info_Layout(void)
 {
-	// 清屏并显示标题
+	// 清屏
 	LCD_Clear(WHITE);
-	LCD_ShowString(50, 10, 150, 16, 16, (u8 *)"Sensor Data");
+	// 前两行预留给日期时间显示（24号字体）
 
-	// 显示固定的文本标签
-	LCD_ShowString(10, 50, 60, 16, 16, (u8 *)"Temp:");
-	LCD_ShowString(120, 50, 60, 16, 16, (u8 *)"Humi:");
-	LCD_ShowString(10, 80, 60, 16, 16, (u8 *)"Light:");
-	LCD_ShowString(10, 110, 70, 16, 16, (u8 *)"Status:");
-	LCD_ShowString(10, 140, 100, 16, 16, (u8 *)"Time:");
-	LCD_ShowString(10, 170, 60, 16, 16, (u8 *)"BEEP:");
-	LCD_ShowString(10, 200, 80, 16, 16, (u8 *)"Volume:");
-	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
-	LCD_ShowString(10, 260, 60, 16, 16, (u8 *)"BEEP:");
-	LCD_ShowString(10, 290, 60, 16, 16, (u8 *)"Delay:");
-	LCD_ShowString(10, 320, 60, 16, 16, (u8 *)"LED2:");
-	LCD_ShowString(10, 350, 100, 16, 16, (u8 *)"Motor Power:");
-	LCD_ShowString(10, 380, 70, 16, 16, (u8 *)"Music:");
-	LCD_ShowString(10, 410, 220, 16, 16, (u8 *)"KEY_UP: Switch Page");
+	// 在时间下方显示BK图片 (位置: x=80, y=75, 尺寸: 80x60)
+	LCD_ShowPicture(80, 75, 80, 60, (u8 *)gImage_BK);
+
+	// 显示固定的文本标签 - 所有位置向下调整以适应日期时间和图片
+	LCD_ShowString(10, 145, 60, 16, 16, (u8 *)"Temp:");
+	LCD_ShowString(120, 145, 60, 16, 16, (u8 *)"Humi:");
+	LCD_ShowString(10, 175, 60, 16, 16, (u8 *)"Light:");
+	LCD_ShowString(10, 205, 70, 16, 16, (u8 *)"Status:");
+	LCD_ShowString(10, 235, 60, 16, 16, (u8 *)"BEEP:");
+	LCD_ShowString(10, 265, 80, 16, 16, (u8 *)"Volume:");
+	LCD_ShowString(10, 295, 220, 16, 16, (u8 *)"Press KEY2 to BT mode");
+	LCD_ShowString(10, 325, 60, 16, 16, (u8 *)"Music:");
+	LCD_ShowString(10, 355, 60, 16, 16, (u8 *)"Timer:");
+	LCD_ShowString(10, 385, 60, 16, 16, (u8 *)"LED2:");
+	LCD_ShowString(10, 415, 100, 16, 16, (u8 *)"Motor Power:");
+	LCD_ShowString(10, 445, 220, 16, 16, (u8 *)"KEY_UP: Switch Page");
 }
 
 // 只更新传感器数据页面的动态数值
@@ -230,123 +469,112 @@ void Update_Sensor_Values(u8 temp, u8 humi, u8 lsens_value)
 {
 	char buf[32];
 
-	// 更新温湿度值 - 只刷新数值部分
-	LCD_Fill(70, 50, 110, 66, WHITE);
+	// 更新日期 - 第一行居中，使用24号字体
+	LCD_Fill(10, 10, 230, 34, WHITE);
+	sprintf(buf, "%04d-%02d-%02d", calendar.w_year, calendar.w_month, calendar.w_date);
+	LCD_ShowString(60, 10, 160, 24, 24, (u8 *)buf);
+
+	// 更新时间 - 第二行居中，使用28号字体
+	LCD_Fill(10, 40, 230, 68, WHITE);
+	sprintf(buf, "%02d:%02d:%02d", calendar.hour, calendar.min, calendar.sec);
+	LCD_ShowString(75, 40, 130, 24, 24, (u8 *)buf);
+
+	// 图片不需要更新，因为它是静态的
+
+	// 更新温湿度值 - 调整Y坐标以适应图片位置
+	LCD_Fill(70, 145, 110, 161, WHITE);
 	sprintf(buf, "%2dC", temp);
-	LCD_ShowString(70, 50, 40, 16, 16, (u8 *)buf);
+	LCD_ShowString(70, 145, 40, 16, 16, (u8 *)buf);
 
-	LCD_Fill(180, 50, 220, 66, WHITE);
+	LCD_Fill(180, 145, 220, 161, WHITE);
 	sprintf(buf, "%2d%%", humi);
-	LCD_ShowString(180, 50, 40, 16, 16, (u8 *)buf);
+	LCD_ShowString(180, 145, 40, 16, 16, (u8 *)buf);
 
-	// 更新光敏值 - 只刷新数值部分
-	LCD_Fill(70, 80, 120, 96, WHITE);
+	// 更新光敏值
+	LCD_Fill(70, 175, 120, 191, WHITE);
 	sprintf(buf, "%3d", lsens_value);
-	LCD_ShowString(70, 80, 50, 16, 16, (u8 *)buf);
+	LCD_ShowString(70, 175, 50, 16, 16, (u8 *)buf);
 
-	// 更新状态指示 - 只刷新状态文本部分
-	LCD_Fill(80, 110, 220, 126, WHITE);
+	// 更新状态指示
+	LCD_Fill(80, 205, 220, 221, WHITE);
 	if (temp > 28)
 	{
-		LCD_ShowString(80, 110, 140, 16, 16, (u8 *)"Hot");
+		LCD_ShowString(80, 205, 140, 16, 16, (u8 *)"Hot");
 	}
 	else if (temp < 15)
 	{
-		LCD_ShowString(80, 110, 140, 16, 16, (u8 *)"Cold");
+		LCD_ShowString(80, 205, 140, 16, 16, (u8 *)"Cold");
 	}
 	else
 	{
-		LCD_ShowString(80, 110, 140, 16, 16, (u8 *)"Normal");
+		LCD_ShowString(80, 205, 140, 16, 16, (u8 *)"Normal");
 	}
 
-	// 更新时间
-	LCD_Fill(70, 140, 220, 156, WHITE);
-	sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", calendar.w_year, calendar.w_month, calendar.w_date, calendar.hour, calendar.min, calendar.sec);
-	LCD_ShowString(70, 140, 150, 16, 16, (u8 *)buf);
-
 	// 更新蜂鸣器状态
-	LCD_Fill(70, 170, 120, 186, WHITE);
+	LCD_Fill(70, 235, 120, 251, WHITE);
 	sprintf(buf, "%s", beep_status ? "ON" : "OFF");
-	LCD_ShowString(70, 170, 50, 16, 16, (u8 *)buf);
+	LCD_ShowString(70, 235, 50, 16, 16, (u8 *)buf);
 
 	// 更新蜂鸣器音量百分比
-	LCD_Fill(90, 200, 150, 216, WHITE);
+	LCD_Fill(90, 265, 150, 281, WHITE);
 	sprintf(buf, "%d%%", beep_duty * 100 / beep_period);
-	LCD_ShowString(90, 200, 60, 16, 16, (u8 *)buf);
+	LCD_ShowString(90, 265, 60, 16, 16, (u8 *)buf);
 
 	// 更新BEEP状态或倒计时
-	LCD_Fill(70, 260, 220, 276, WHITE);
+	LCD_Fill(70, 325, 220, 341, WHITE);
 	if (beep_setting_mode)
 	{
-		LCD_ShowString(70, 260, 150, 16, 16, (u8 *)"SETTING");
+		LCD_ShowString(70, 325, 150, 16, 16, (u8 *)"SETTING");
 
 		// 更新当前设置的延时时间
-		LCD_Fill(70, 290, 220, 306, WHITE);
+		LCD_Fill(70, 355, 220, 371, WHITE);
 		sprintf(buf, "%d seconds", beep_setting_seconds);
-		LCD_ShowString(70, 290, 150, 16, 16, (u8 *)buf);
+		LCD_ShowString(70, 355, 150, 16, 16, (u8 *)buf);
 	}
 	else if (beep_timer_active)
 	{
 		sprintf(buf, "COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
-		LCD_ShowString(70, 260, 150, 16, 16, (u8 *)buf);
+		LCD_ShowString(70, 325, 150, 16, 16, (u8 *)buf);
 	}
 	else
 	{
 		sprintf(buf, "%s", beep_status ? "ON" : "OFF");
-		LCD_ShowString(70, 260, 150, 16, 16, (u8 *)buf);
+		LCD_ShowString(70, 325, 150, 16, 16, (u8 *)buf);
 	}
 
 	// 更新LED2状态
-	LCD_Fill(70, 320, 120, 336, WHITE);
+	LCD_Fill(70, 385, 120, 401, WHITE);
 	sprintf(buf, "%s", LED2 ? "OFF" : "ON");
-	LCD_ShowString(70, 320, 50, 16, 16, (u8 *)buf);
+	LCD_ShowString(70, 385, 50, 16, 16, (u8 *)buf);
 
 	// 更新电机功率
-	LCD_Fill(110, 350, 170, 366, WHITE);
+	LCD_Fill(110, 415, 170, 431, WHITE);
 	sprintf(buf, "%d", motor_power);
-	LCD_ShowString(110, 350, 60, 16, 16, (u8 *)buf);
-
-	// 更新音乐播放状态
-	LCD_Fill(80, 380, 220, 396, WHITE);
-	if (music_status == MUSIC_PLAY)
-	{
-		extern const char *song_names[];
-		sprintf(buf, "%s", song_names[current_song]);
-	}
-	else if (music_status == MUSIC_PAUSE)
-	{
-		extern const char *song_names[];
-		sprintf(buf, "%s (Paused)", song_names[current_song]);
-	}
-	else
-	{
-		sprintf(buf, "Stopped");
-	}
-	LCD_ShowString(80, 380, 140, 16, 16, (u8 *)buf);
+	LCD_ShowString(110, 415, 60, 16, 16, (u8 *)buf);
 
 	// 更新光敏控制状态
 	if (motor_auto_control)
 	{
-		LCD_Fill(140, 350, 220, 366, WHITE);
+		LCD_Fill(140, 415, 220, 431, WHITE);
 		if (motor_running)
 		{
 			sprintf(buf, "(AUTO %d.%ds)", motor_timer / 10, motor_timer % 10);
-			LCD_ShowString(140, 350, 80, 16, 16, (u8 *)buf);
+			LCD_ShowString(140, 415, 80, 16, 16, (u8 *)buf);
 		}
 		else
 		{
-			LCD_ShowString(140, 350, 80, 16, 16, (u8 *)"(AUTO)");
+			LCD_ShowString(140, 415, 80, 16, 16, (u8 *)"(AUTO)");
 		}
 	}
 	else if (motor_running)
 	{
-		LCD_Fill(140, 350, 220, 366, WHITE);
-		LCD_ShowString(140, 350, 80, 16, 16, (u8 *)"(MANUAL ON)");
+		LCD_Fill(140, 415, 220, 431, WHITE);
+		LCD_ShowString(140, 415, 80, 16, 16, (u8 *)"(MANUAL ON)");
 	}
 	else
 	{
-		LCD_Fill(140, 350, 220, 366, WHITE);
-		LCD_ShowString(140, 350, 80, 16, 16, (u8 *)"(OFF)");
+		LCD_Fill(140, 415, 220, 431, WHITE);
+		LCD_ShowString(140, 415, 80, 16, 16, (u8 *)"(OFF)");
 	}
 }
 
@@ -377,8 +605,8 @@ void Show_Help_Page(void)
 	// 显示红外遥控操作说明
 	LCD_ShowString(10, 130, 220, 16, 16, (u8 *)"IR3: Toggle Auto Control");
 	LCD_ShowString(10, 150, 220, 16, 16, (u8 *)"IR4: Manual Motor Control");
-	LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"IR5: Decrease BEEP Delay");
-	LCD_ShowString(10, 190, 220, 16, 16, (u8 *)"IR6: Start BEEP+RGB Timer");
+	LCD_ShowString(10, 170, 220, 16, 16, (u8 *)"IR5: Decrease Timer Delay");
+	LCD_ShowString(10, 190, 220, 16, 16, (u8 *)"IR6: Start Music+RGB Timer");
 	LCD_ShowString(10, 210, 220, 16, 16, (u8 *)"IR7/8: Adjust Motor Power");
 	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"IR9: Emergency Stop");
 	LCD_ShowString(10, 250, 220, 16, 16, (u8 *)"IR_PREV/NEXT: Music Control");
@@ -386,7 +614,7 @@ void Show_Help_Page(void)
 	// 显示功能说明
 	LCD_ShowString(10, 270, 220, 16, 16, (u8 *)"Auto Control: Light < 20");
 	LCD_ShowString(10, 290, 220, 16, 16, (u8 *)"Motor runs for 5 seconds");
-	LCD_ShowString(10, 310, 220, 16, 16, (u8 *)"RGB shows countdown+heart");
+	LCD_ShowString(10, 310, 220, 16, 16, (u8 *)"Timer end: Lanhua Grass song");
 
 	// 显示页面切换提示
 	LCD_ShowString(10, 340, 220, 16, 16, (u8 *)"KEY_UP: Back to Data Page");
@@ -408,10 +636,10 @@ void Show_BT_Info(void)
 	LCD_ShowString(10, 180, 200, 16, 16, (u8 *)"Receive:");
 	LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to Sensor mode");
 
-	// 如果蜂鸣器定时器已激活，显示倒计时
+	// 如果音乐定时器已激活，显示倒计时
 	if (beep_timer_active)
 	{
-		sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
+		sprintf(buf, "Lanhua Grass+ in %d.%ds", beep_delay / 10, beep_delay % 10);
 		LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
 	}
 
@@ -462,17 +690,17 @@ void Process_BT_Command(u8 *buf, u16 len)
 			// 反馈信息
 			if (bt_initialized == 1)
 			{
-				u3_printf("Will turn on BEEP in %d seconds\r\n", seconds);
+				u3_printf("Will play Lanhua Grass (optimized) in %d seconds\r\n", seconds);
 			}
-			printf("Will turn on BEEP in %d seconds\r\n", seconds);
+			printf("Will play Lanhua Grass (optimized) in %d seconds\r\n", seconds);
 
 			// 更新显示
 			if (current_mode == 0)
 			{
 				char buf[32];
-				LCD_Fill(10, 260, 220, 276, WHITE);
-				sprintf(buf, "BEEP will ON in %d.%ds", beep_delay / 10, beep_delay % 10);
-				LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+				LCD_Fill(70, 250, 220, 266, WHITE);
+				sprintf(buf, "Lanhua Grass+ in %d.%ds", beep_delay / 10, beep_delay % 10);
+				LCD_ShowString(70, 250, 150, 16, 16, (u8 *)buf);
 			}
 			else
 			{
@@ -488,6 +716,7 @@ void Process_IR_Command(void)
 {
 	if (hw_jsbz)
 	{										   // 有红外数据接收到
+		Reset_Idle_Timer();					   // 重置空闲计时器
 		printf("IR Code: 0x%08X\r\n", hw_jsm); // 打印接收到的红外代码
 
 		// 根据红外代码控制电机
@@ -563,11 +792,11 @@ void Process_IR_Command(void)
 			printf("LED2 OFF\r\n");
 		}
 		else if (hw_jsm == IR_KEY3)
-		{ // 按键3 - 进入BEEP设置模式
+		{ // 按键3 - 进入音乐定时器设置模式
 			beep_setting_mode = 1;
 			beep_setting_seconds = 0;
-			LCD_ShowString(10, 290, 220, 16, 16, (u8 *)"BEEP Setting Mode");
-			printf("Enter BEEP setting mode\r\n");
+			LCD_ShowString(70, 280, 150, 16, 16, (u8 *)"Music Timer Setting Mode");
+			printf("Enter music timer setting mode\r\n");
 		}
 		else if (hw_jsm == IR_KEY4)
 		{ // 按键4 - 增加延时时间
@@ -577,9 +806,9 @@ void Process_IR_Command(void)
 				if (beep_setting_seconds > 600)
 					beep_setting_seconds = 600; // 最大600秒
 
-				sprintf(buf, "Delay: %ds", beep_setting_seconds);
-				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
-				printf("BEEP delay set to %d seconds\r\n", beep_setting_seconds);
+				sprintf(buf, "Timer: %ds", beep_setting_seconds);
+				LCD_ShowString(70, 280, 150, 16, 16, (u8 *)buf);
+				printf("Music timer set to %d seconds\r\n", beep_setting_seconds);
 			}
 		}
 		else if (hw_jsm == IR_KEY5)
@@ -589,9 +818,9 @@ void Process_IR_Command(void)
 				beep_setting_seconds -= 1;
 				if (beep_setting_seconds < 0)
 					beep_setting_seconds = 0;
-				sprintf(buf, "Delay: %ds", beep_setting_seconds);
-				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)buf);
-				printf("BEEP delay set to %d seconds\r\n", beep_setting_seconds);
+				sprintf(buf, "Timer: %ds", beep_setting_seconds);
+				LCD_ShowString(70, 280, 150, 16, 16, (u8 *)buf);
+				printf("Music timer set to %d seconds\r\n", beep_setting_seconds);
 			}
 		}
 		else if (hw_jsm == IR_KEY6)
@@ -601,8 +830,8 @@ void Process_IR_Command(void)
 				beep_delay = beep_setting_seconds * 10; // 转换为100ms单位
 				beep_timer_active = 1;
 				beep_setting_mode = 0;
-				LCD_ShowString(10, 290, 220, 16, 16, (u8 *)"BEEP Timer Started!");
-				printf("BEEP timer started for %d seconds\r\n", beep_setting_seconds);
+				LCD_ShowString(70, 280, 150, 16, 16, (u8 *)"Music Timer Started!");
+				printf("Music timer started for %d seconds\r\n", beep_setting_seconds);
 
 				// 初始化RGB LED并显示倒计时起始数字（五彩斑斓效果）
 				RGB_LED_Init();
@@ -773,11 +1002,49 @@ int main()
 	Init_Sensor_Info_Layout();
 	Update_Sensor_Values(temp, humi, lsens_value);
 
-	// Display a message that RGB LED demo can be activated with KEY0
-	LCD_ShowString(10, 440, 220, 16, 16, (u8 *)"Press KEY0 to start RGB demo");
-
 	while (1)
 	{
+		// 在时钟模式下的处理
+		if (clock_mode_active)
+		{
+			// 检查用户活动
+			if (Check_Clock_Mode_Activity())
+			{
+				// 如果有活动，则已退出时钟模式，继续下一轮循环
+				delay_ms(100);
+				t++;
+				continue;
+			}
+
+			// 更新RTC时间
+			RTC_Get();
+
+			// 更新时钟显示
+			Update_Clock_Display();
+
+			// 延时100ms后继续下一轮循环
+			delay_ms(100);
+			t++;
+			continue;
+		}
+
+		// 在非时钟模式下增加空闲计时器
+		idle_timer++;
+
+		// 检查是否超时（5秒无操作）
+		if (idle_timer >= idle_timeout)
+		{
+			printf("5 seconds idle timeout, entering clock mode\r\n");
+			current_mode = 2; // 切换到时钟模式
+			Init_Clock_Display();
+			Reset_Idle_Timer();
+
+			// 延时100ms后继续下一轮循环
+			delay_ms(100);
+			t++;
+			continue;
+		}
+
 		// 处理蜂鸣器定时器
 		if (beep_timer_active)
 		{
@@ -786,7 +1053,8 @@ int main()
 				beep_delay--;
 				if (beep_delay == 0)
 				{
-					BEEP_On(); // 延时结束，打开蜂鸣器
+					// 延时结束，播放新格式的兰花草歌曲
+					Music_Play_Lanhua_Grass_New(); // 播放优化版兰花草
 					beep_timer_active = 0;
 
 					// 显示五彩斑斓的爱心并启动爱心显示定时器
@@ -797,17 +1065,17 @@ int main()
 					// 更新显示
 					if (current_mode == 0 && display_page == 0)
 					{
-						// 更新BEEP状态显示
-						LCD_Fill(10, 260, 220, 276, WHITE);
-						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)"BEEP: ON");
+						// 更新音乐状态显示
+						LCD_Fill(70, 250, 220, 266, WHITE);
+						LCD_ShowString(70, 250, 150, 16, 16, (u8 *)"Playing Lanhua Grass+");
 					}
 
 					// 反馈信息
 					if (bt_initialized == 1)
 					{
-						u3_printf("BEEP is now ON!\r\n");
+						u3_printf("Playing Lanhua Grass (optimized)!\r\n");
 					}
-					printf("BEEP is now ON!\r\n");
+					printf("Playing Lanhua Grass (optimized)!\r\n");
 				}
 				else if (beep_delay % 10 == 0)
 				{ // 每秒更新一次显示
@@ -815,9 +1083,9 @@ int main()
 					if (current_mode == 0 && display_page == 0)
 					{
 						char buf[32];
-						LCD_Fill(10, 260, 220, 276, WHITE);
-						sprintf(buf, "BEEP: COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
-						LCD_ShowString(10, 260, 220, 16, 16, (u8 *)buf);
+						LCD_Fill(70, 250, 220, 266, WHITE);
+						sprintf(buf, "COUNTDOWN %d.%ds", beep_delay / 10, beep_delay % 10);
+						LCD_ShowString(70, 250, 150, 16, 16, (u8 *)buf);
 					}
 
 					// 在RGB模块上显示倒计时数字（五彩斑斓效果）
@@ -858,6 +1126,9 @@ int main()
 
 		// 更新音乐播放
 		Music_Update();
+
+		// 更新新格式音乐播放
+		Music_Update_New_Format();
 
 		// 光敏控制电机联动逻辑
 		if (motor_auto_control)
@@ -909,6 +1180,8 @@ int main()
 		// 模式切换（KEY2按键）
 		if (key_val == KEY2_PRESS)
 		{
+			Reset_Idle_Timer(); // 重置空闲计时器
+
 			if (current_mode == 0)
 			{
 				// 正在从传感器模式切换到蓝牙模式
@@ -942,7 +1215,7 @@ int main()
 					LCD_ShowString(10, 230, 220, 16, 16, (u8 *)"Press KEY2 to try again");
 				}
 			}
-			else
+			else if (current_mode == 1)
 			{
 				// 从蓝牙模式切换到传感器模式
 				current_mode = 0;
@@ -961,6 +1234,7 @@ int main()
 		{ // 传感器模式
 			if (key_val == KEY_UP_PRESS)
 			{
+				Reset_Idle_Timer(); // 重置空闲计时器
 				// KEY_UP: 切换显示页面
 				display_page = !display_page;
 				if (display_page == 0)
@@ -977,6 +1251,7 @@ int main()
 			}
 			else if (key_val == KEY0_PRESS)
 			{
+				Reset_Idle_Timer(); // 重置空闲计时器
 				// Check if KEY0 was held for a long press (>1 second)
 				delay_ms(100); // Debounce delay
 				if (KEY0 == 0) // Still pressed
@@ -1049,6 +1324,7 @@ int main()
 			}
 			else if (key_val == KEY1_PRESS)
 			{
+				Reset_Idle_Timer(); // 重置空闲计时器
 				// KEY1: 切换音乐播放/停止
 				if (music_status == MUSIC_STOP)
 				{
@@ -1089,10 +1365,11 @@ int main()
 				Update_Sensor_Values(temp, humi, lsens_value);
 			}
 		}
-		else
+		else if (current_mode == 1)
 		{ // 蓝牙模式
 			if (key_val == KEY_UP_PRESS)
 			{
+				Reset_Idle_Timer(); // 重置空闲计时器
 				// 切换模块主从设置
 				key_val = HC05_Get_Role();
 				if (key_val != 0XFF)
@@ -1109,6 +1386,7 @@ int main()
 			}
 			else if (key_val == KEY1_PRESS)
 			{
+				Reset_Idle_Timer();	  // 重置空闲计时器
 				sendmask = !sendmask; // 发送/停止发送
 				if (sendmask == 0)
 					LCD_Fill(10 + 40, 160, 240, 160 + 16, WHITE); // 清除显示
@@ -1132,6 +1410,7 @@ int main()
 
 			if (USART3_RX_STA & 0X8000)
 			{										// 接收到一次数据了
+				Reset_Idle_Timer();					// 重置空闲计时器
 				LCD_Fill(10, 200, 240, 320, WHITE); // 清除显示
 				reclen = USART3_RX_STA & 0X7FFF;	// 得到数据长度
 				USART3_RX_BUF[reclen] = '\0';		// 加入结束符

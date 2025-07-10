@@ -30,6 +30,7 @@
 ".\obj\led.o"
 ".\obj\lsens.o"
 ".\obj\tftlcd.o"
+".\obj\bk_image.o"
 ".\obj\oled.o"
 ".\obj\beep.o"
 ".\obj\dht11.o"
