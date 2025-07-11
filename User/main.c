@@ -2,7 +2,7 @@
 #include "SysTick.h"
 #include "lsens.h"
 #include "../APP/tftlcd/tftlcd.h"
-// #include "../APP/tftlcd/bk_image.h"  // 移除图片显示
+// #include "../APP/tftlcd/bk_image.h"
 #include "../APP/dht11/dht11.h"
 #include "../APP/rtc/rtc.h"
 #include "../APP/key/key.h"
@@ -37,6 +37,8 @@ void Init_Sensor_Info_Layout(void);
 void Update_Sensor_Values(u8 temp, u8 humi, u8 lsens_value);
 void Exit_Clock_Mode(void);
 void Display_SmartMaster_Title(void);
+void Process_PC_Answer(u8 *buf, u16 len);
+void Show_QA_Display(void);
 
 // 时钟相关常量
 #define PI 3.1415926
@@ -100,6 +102,14 @@ u8 last_sec = 0xFF;		  // 上一秒钟值，用于检测秒钟变化
 u8 previous_mode = 0;	  // 记录进入时钟模式前的模式
 
 char buf[32];
+
+// AI问答相关变量
+u8 qa_mode_active = 0;	   // 0: 非问答模式, 1: 问答模式激活
+u8 qa_status = 0;		   // 0: 等待问题, 1: 处理中, 2: 显示答案
+char qa_question[200];	   // 问题缓冲区
+char qa_answer[500];	   // 答案缓冲区
+u16 qa_answer_len = 0;	   // 答案长度
+u16 qa_display_offset = 0; // 答案显示偏移量
 
 // 数字0-9对应的颜色数组（每个数字都有不同的颜色）
 const u32 digit_colors[10] = {
@@ -679,6 +689,100 @@ void Show_BT_Info(void)
 	FRONT_COLOR = BLUE;
 	HC05_Role_Show();
 	HC05_Sta_Show();
+
+	// 新增：显示问答功能说明
+	FRONT_COLOR = BLACK;
+	LCD_ShowString(10, 180, 220, 16, 16, (u8 *)"Send '?' to ask AI");
+
+	// 新增：如果问答模式激活，显示问答内容
+	if (qa_mode_active)
+	{
+		Show_QA_Display();
+	}
+}
+
+// 处理电脑返回的AI回答
+void Process_PC_Answer(u8 *buf, u16 len)
+{
+	if (strncmp((const char *)buf, "+ANSWER:", 8) == 0)
+	{
+		// 提取答案内容
+		strncpy(qa_answer, (const char *)&buf[8], sizeof(qa_answer) - 1);
+		qa_answer[sizeof(qa_answer) - 1] = '\0';
+		qa_answer_len = strlen(qa_answer);
+
+		// 更新状态
+		qa_status = 2; // 显示答案
+		qa_display_offset = 0;
+
+		// 反馈给手机
+		if (bt_initialized == 1)
+		{
+			u3_printf("AI_answer：%s\r\n", qa_answer);
+		}
+
+		printf("AI Answer received: %s\r\n", qa_answer);
+
+		// 在蓝牙模式下更新显示
+		if (current_mode == 1)
+		{
+			Show_QA_Display();
+		}
+	}
+}
+
+// 显示问答界面
+void Show_QA_Display(void)
+{
+	LCD_Fill(10, 280, 230, 450, WHITE); // 清除问答显示区域
+
+	if (qa_mode_active)
+	{
+		// 显示问题
+		LCD_ShowString(10, 280, 220, 16, 16, (u8 *)"Q:");
+		LCD_ShowString(30, 280, 200, 32, 16, (u8 *)qa_question);
+
+		if (qa_status == 1)
+		{
+			// 处理中
+			LCD_ShowString(10, 320, 220, 16, 16, (u8 *)"AI thinking...");
+		}
+		else if (qa_status == 2)
+		{
+			// 声明变量（C89要求在代码块开始处）
+			u16 start_pos = qa_display_offset;
+			u16 y_pos = 360;
+			u16 line_count = 0;
+
+			// 显示答案（支持长文本滚动）
+			LCD_ShowString(10, 340, 220, 16, 16, (u8 *)"A:");
+
+			// 分行显示答案，每行最多显示约27个字符
+
+			while (start_pos < qa_answer_len && line_count < 4)
+			{
+				// 声明变量（C89要求在代码块开始处）
+				char line_buf[28];
+				u16 line_len = 0;
+
+				// 提取一行内容
+				while (line_len < 27 && start_pos < qa_answer_len)
+				{
+					line_buf[line_len++] = qa_answer[start_pos++];
+				}
+				line_buf[line_len] = '\0';
+
+				LCD_ShowString(30, y_pos + line_count * 16, 200, 16, 16, (u8 *)line_buf);
+				line_count++;
+			}
+
+			// 显示滚动提示
+			if (qa_answer_len > qa_display_offset + 108)
+			{ // 4行*27字符
+				LCD_ShowString(10, 430, 220, 16, 16, (u8 *)"KEY1: Scroll down");
+			}
+		}
+	}
 }
 
 // 处理接收到的蓝牙命令
@@ -737,11 +841,41 @@ void Process_BT_Command(u8 *buf, u16 len)
 			}
 		}
 	}
+
+	// 新增：检测问答命令
+	else if (strncmp((const char *)buf, "+ASK:", 5) == 0 ||
+			 strstr((const char *)buf, "?") != NULL)
+	{
+		// 提取问题内容
+		strncpy(qa_question, (const char *)buf, sizeof(qa_question) - 1);
+		qa_question[sizeof(qa_question) - 1] = '\0';
+
+		// 发送给电脑处理
+		printf("+QUESTION:%s\r\n", qa_question);
+
+		// 更新状态
+		qa_mode_active = 1;
+		qa_status = 1; // 处理中
+
+		// 在蓝牙模式下更新显示
+		if (current_mode == 1)
+		{
+			LCD_Fill(10, 300, 230, 350, WHITE);
+			LCD_ShowString(10, 300, 220, 16, 16, (u8 *)"Question received...");
+			LCD_ShowString(10, 320, 220, 16, 16, (u8 *)"Processing by AI...");
+		}
+
+		printf("Question received: %s\r\n", qa_question);
+	}
 }
 
 // 处理红外遥控器输入
 void Process_IR_Command(void)
 {
+	// 声明变量（C89要求在函数开始处）
+	char buf[32];
+	u8 digit;
+
 	if (hw_jsbz)
 	{										   // 有红外数据接收到
 		Reset_Idle_Timer();					   // 重置空闲计时器
@@ -872,7 +1006,7 @@ void Process_IR_Command(void)
 				else
 				{
 					// 如果超过9秒，显示个位数
-					u8 digit = beep_setting_seconds % 10;
+					digit = beep_setting_seconds % 10;
 					RGB_ShowCharNum_Debug(digit, 0); // 颜色参数已不使用
 				}
 			}
@@ -996,6 +1130,7 @@ int main()
 	char buf[32]; // 显示缓冲区
 	u16 press_time;
 	u8 remaining_seconds; // 倒计时剩余秒数
+	u8 digit;			  // 数字显示变量
 
 	// 系统初始化
 	SysTick_Init(72);
@@ -1150,7 +1285,7 @@ int main()
 					else
 					{
 						// 如果超过9秒，显示个位数
-						u8 digit = remaining_seconds % 10;
+						digit = remaining_seconds % 10;
 						RGB_ShowCharNum_Debug(digit, 0); // 颜色参数已不使用
 					}
 				}
@@ -1438,10 +1573,24 @@ int main()
 			}
 			else if (key_val == KEY1_PRESS)
 			{
-				Reset_Idle_Timer();	  // 重置空闲计时器
-				sendmask = !sendmask; // 发送/停止发送
-				if (sendmask == 0)
-					LCD_Fill(10 + 40, 160, 240, 160 + 16, WHITE); // 清除显示
+				Reset_Idle_Timer(); // 重置空闲计时器
+				// 新增：KEY1用于问答滚动
+				if (qa_mode_active && qa_status == 2)
+				{
+					// 滚动显示答案
+					if (qa_answer_len > qa_display_offset + 108)
+					{
+						qa_display_offset += 27; // 向下滚动一行
+						Show_QA_Display();
+					}
+				}
+				else
+				{
+					// 原有功能：发送/停止发送
+					sendmask = !sendmask;
+					if (sendmask == 0)
+						LCD_Fill(10 + 40, 160, 240, 160 + 16, WHITE); // 清除显示
+				}
 			}
 
 			if (t % 50 == 0)
@@ -1474,6 +1623,18 @@ int main()
 
 				LCD_ShowString(10, 200, 209, 119, 16, USART3_RX_BUF); // 显示接收到的数据
 				USART3_RX_STA = 0;
+			}
+
+			// 新增：USART1接收处理（电脑回答）
+			if (USART1_RX_STA & 0X8000)
+			{
+				u8 pc_reclen = USART1_RX_STA & 0X7FFF;
+				USART1_RX_BUF[pc_reclen] = '\0';
+
+				// 处理电脑回答
+				Process_PC_Answer(USART1_RX_BUF, pc_reclen);
+
+				USART1_RX_STA = 0; // 清除接收标志
 			}
 		}
 

@@ -1,5 +1,5 @@
 Dependencies for Project 'Template', Target 'Target 1': (DO NOT MODIFY !)
-F (.\User\main.c)(0x686F790F)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\User -I .\Libraries\CMSIS -I .\Libraries\STM32F10x_StdPeriph_Driver\inc -I .\APP\led -I .\Public -I .\APP\key -I .\APP\exti -I .\APP\time -I .\APP\pwm -I .\APP\iwdg -I .\APP\wwdg -I .\APP\input -I .\APP\wkup -I .\APP\adc -I .\APP\adc_temp -I .\APP\beep -I .\APP\touch_key -I .\APP\lsens -I .\APP\usart3 -I .\APP\hc05 -I .\APP\time-I.\RTE\_Target_1-ID:\app\SummerLearning\Keil5packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-ID:\app\SummerLearning\Keil5\ARM\CMSIS\Include-D__UVISION_VERSION="528" -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_HD-o .\obj\main.o --omf_browse .\obj\main.crf --depend .\obj\main.d)
+F (.\User\main.c)(0x6870A2AF)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\User -I .\Libraries\CMSIS -I .\Libraries\STM32F10x_StdPeriph_Driver\inc -I .\APP\led -I .\Public -I .\APP\key -I .\APP\exti -I .\APP\time -I .\APP\pwm -I .\APP\iwdg -I .\APP\wwdg -I .\APP\input -I .\APP\wkup -I .\APP\adc -I .\APP\adc_temp -I .\APP\beep -I .\APP\touch_key -I .\APP\lsens -I .\APP\usart3 -I .\APP\hc05 -I .\APP\time-I.\RTE\_Target_1-ID:\app\SummerLearning\Keil5packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-ID:\app\SummerLearning\Keil5\ARM\CMSIS\Include-D__UVISION_VERSION="528" -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_HD-o .\obj\main.o --omf_browse .\obj\main.crf --depend .\obj\main.d)
 I (.\Public\system.h)(0x686E11CB)
 I (.\User\stm32f10x.h)(0x686E11CB)
 I (.\Libraries\CMSIS\core_cm3.h)(0x686E11CA)
@@ -40,7 +40,7 @@ I (User\../APP/beep/music.h)(0x686F307A)
 I (User\../APP/hc05/hc05.h)(0x686E11CA)
 I (User\../APP/hwjs/hwjs.h)(0x686E11CA)
 I (User\../APP/pwm/pwm.h)(0x686E11CA)
-I (User\../APP/ws2812/ws2812.h)(0x686F790F)
+I (User\../APP/ws2812/ws2812.h)(0x6870705D)
 I (User\../APP/ws2812/rgb_display.h)(0x686E2E06)
 I (.\Public\usart.h)(0x686E11CB)
 I (D:\app\SummerLearning\Keil5\ARM\ARMCC\include\stdio.h)(0x5CEB79E2)
@@ -1138,7 +1138,7 @@ I (.\Public\SysTick.h)(0x686E11CB)
 I (.\Public\usart.h)(0x686E11CB)
 I (D:\app\SummerLearning\Keil5\ARM\ARMCC\include\stdio.h)(0x5CEB79E2)
 F (.\APP\ws2812\ws2812.c)(0x686F7A12)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\User -I .\Libraries\CMSIS -I .\Libraries\STM32F10x_StdPeriph_Driver\inc -I .\APP\led -I .\Public -I .\APP\key -I .\APP\exti -I .\APP\time -I .\APP\pwm -I .\APP\iwdg -I .\APP\wwdg -I .\APP\input -I .\APP\wkup -I .\APP\adc -I .\APP\adc_temp -I .\APP\beep -I .\APP\touch_key -I .\APP\lsens -I .\APP\usart3 -I .\APP\hc05 -I .\APP\time-I.\RTE\_Target_1-ID:\app\SummerLearning\Keil5packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-ID:\app\SummerLearning\Keil5\ARM\CMSIS\Include-D__UVISION_VERSION="528" -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_HD-o .\obj\ws2812.o --omf_browse .\obj\ws2812.crf --depend .\obj\ws2812.d)
-I (APP\ws2812\ws2812.h)(0x686F790F)
+I (APP\ws2812\ws2812.h)(0x6870705D)
 I (.\Public\system.h)(0x686E11CB)
 I (.\User\stm32f10x.h)(0x686E11CB)
 I (.\Libraries\CMSIS\core_cm3.h)(0x686E11CA)
@@ -1179,7 +1179,7 @@ F (.\APP\oled\picture.h)(0x686E11CA)()
 F (.\APP\pwm\pwm.h)(0x686E11CA)()
 F (.\APP\rtc\rtc.h)(0x686E11CA)()
 F (.\APP\tftlcd\tftlcd.h)(0x686E11CA)()
-F (.\APP\ws2812\ws2812.h)(0x686F790F)()
+F (.\APP\ws2812\ws2812.h)(0x6870705D)()
 F (.\APP\hc05\hc05.c)(0x686E11CA)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\User -I .\Libraries\CMSIS -I .\Libraries\STM32F10x_StdPeriph_Driver\inc -I .\APP\led -I .\Public -I .\APP\key -I .\APP\exti -I .\APP\time -I .\APP\pwm -I .\APP\iwdg -I .\APP\wwdg -I .\APP\input -I .\APP\wkup -I .\APP\adc -I .\APP\adc_temp -I .\APP\beep -I .\APP\touch_key -I .\APP\lsens -I .\APP\usart3 -I .\APP\hc05 -I .\APP\time-I.\RTE\_Target_1-ID:\app\SummerLearning\Keil5packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-ID:\app\SummerLearning\Keil5\ARM\CMSIS\Include-D__UVISION_VERSION="528" -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_HD-o .\obj\hc05.o --omf_browse .\obj\hc05.crf --depend .\obj\hc05.d)
 I (.\Public\SysTick.h)(0x686E11CB)
 I (.\Public\system.h)(0x686E11CB)
@@ -1323,8 +1323,8 @@ I (.\Libraries\STM32F10x_StdPeriph_Driver\inc\misc.h)(0x686E11CA)
 I (APP\beep\beep.h)(0x686E11CA)
 I (.\Public\SysTick.h)(0x686E11CB)
 F (.\APP\beep\music.h)(0x686F307A)()
-F (.\APP\ws2812\rgb_display.c)(0x686F790F)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\User -I .\Libraries\CMSIS -I .\Libraries\STM32F10x_StdPeriph_Driver\inc -I .\APP\led -I .\Public -I .\APP\key -I .\APP\exti -I .\APP\time -I .\APP\pwm -I .\APP\iwdg -I .\APP\wwdg -I .\APP\input -I .\APP\wkup -I .\APP\adc -I .\APP\adc_temp -I .\APP\beep -I .\APP\touch_key -I .\APP\lsens -I .\APP\usart3 -I .\APP\hc05 -I .\APP\time-I.\RTE\_Target_1-ID:\app\SummerLearning\Keil5packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-ID:\app\SummerLearning\Keil5\ARM\CMSIS\Include-D__UVISION_VERSION="528" -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_HD-o .\obj\rgb_display.o --omf_browse .\obj\rgb_display.crf --depend .\obj\rgb_display.d)
-I (APP\ws2812\ws2812.h)(0x686F790F)
+F (.\APP\ws2812\rgb_display.c)(0x6870705C)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\User -I .\Libraries\CMSIS -I .\Libraries\STM32F10x_StdPeriph_Driver\inc -I .\APP\led -I .\Public -I .\APP\key -I .\APP\exti -I .\APP\time -I .\APP\pwm -I .\APP\iwdg -I .\APP\wwdg -I .\APP\input -I .\APP\wkup -I .\APP\adc -I .\APP\adc_temp -I .\APP\beep -I .\APP\touch_key -I .\APP\lsens -I .\APP\usart3 -I .\APP\hc05 -I .\APP\time-I.\RTE\_Target_1-ID:\app\SummerLearning\Keil5packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-ID:\app\SummerLearning\Keil5\ARM\CMSIS\Include-D__UVISION_VERSION="528" -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER -DSTM32F10X_HD-o .\obj\rgb_display.o --omf_browse .\obj\rgb_display.crf --depend .\obj\rgb_display.d)
+I (APP\ws2812\ws2812.h)(0x6870705D)
 I (.\Public\system.h)(0x686E11CB)
 I (.\User\stm32f10x.h)(0x686E11CB)
 I (.\Libraries\CMSIS\core_cm3.h)(0x686E11CA)
